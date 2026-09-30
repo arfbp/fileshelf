@@ -1,0 +1,289 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FileShelf - Fast & Lightweight Software Repository</title>
+  <meta name="description" content="Read-only software repository and fast direct file download server.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;600&family=Plus+Jakarta+Sans:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="assets/style.css">
+</head>
+<body>
+  <div class="app-container">
+    <!-- Header -->
+    <header class="header">
+      <div class="brand">
+        <div class="logo-badge">FS</div>
+        <span class="brand-name">FileShelf</span>
+      </div>
+      <div class="view-switch">
+        <button id="tabPublic" class="switch-btn active" onclick="switchView('public')">Public</button>
+        <button id="tabAdmin" class="switch-btn" onclick="switchView('admin')">Admin</button>
+      </div>
+    </header>
+
+    <!-- Public View -->
+    <main id="publicView" class="view-section active">
+      <div class="page-title-block">
+        <h1 class="page-title">Downloads</h1>
+        <p class="page-subtitle">Installer and utility files served directly from the file repository.</p>
+      </div>
+
+      <!-- Controls Bar -->
+      <div class="controls-bar">
+        <div class="search-wrap">
+          <input type="text" id="searchInput" class="search-input" placeholder="Search files..." autocomplete="off">
+        </div>
+        <div class="filter-dropdown-wrap">
+          <select id="typeFilter" class="select-dropdown">
+            <option value="all">All types</option>
+            <option value="Windows">Windows (.exe, .msi)</option>
+            <option value="macOS">macOS (.dmg, .pkg)</option>
+            <option value="Linux">Linux (.deb, .rpm)</option>
+            <option value="Archive">Archive (.zip, .tar.gz)</option>
+            <option value="ISO">ISO (.iso)</option>
+            <option value="Other">Other</option>
+          </select>
+        </div>
+        <div class="sort-dropdown-wrap">
+          <select id="sortFilter" class="select-dropdown">
+            <option value="name-asc">Name A-Z</option>
+            <option value="name-desc">Name Z-A</option>
+            <option value="newest">Newest</option>
+            <option value="oldest">Oldest</option>
+            <option value="largest">Largest</option>
+            <option value="smallest">Smallest</option>
+            <option value="type">File Type</option>
+          </select>
+        </div>
+      </div>
+
+      <!-- File List -->
+      <div id="fileList" class="file-list">
+        <!-- Rendered via app.js -->
+        <div class="empty-state">Loading repository manifest...</div>
+      </div>
+
+      <!-- Read-Only Notice Box -->
+      <div class="notice-box">
+        <span class="notice-dot"></span>
+        <span>Read-only repository · Files cannot be modified or deleted from this page. Downloads use direct <code>/upload/</code> URLs.</span>
+      </div>
+
+      <!-- Footer -->
+      <footer class="footer-bar">
+        <span class="footer-left">Public access</span>
+        <span class="footer-right">aria2 compatible · HTTP Range supported</span>
+      </footer>
+    </main>
+
+    <!-- Admin View -->
+    <main id="adminView" class="view-section">
+      <!-- Unauthenticated Login Card -->
+      <div id="adminLoginBlock" class="admin-login-box">
+        <div class="login-header">
+          <div class="login-icon">
+            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+              <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+            </svg>
+          </div>
+          <h2 class="login-title">Repository Admin</h2>
+          <p class="login-subtitle">Authentication required to access installer staging and manifest generation.</p>
+        </div>
+
+        <form id="adminLoginForm" onsubmit="handleVanillaLogin(event)">
+          <div id="loginAlert" class="login-alert" style="display: none;"></div>
+
+          <div class="form-group">
+            <label class="form-label">Username</label>
+            <input type="text" id="loginUser" class="form-input" placeholder="Username" required autocomplete="username">
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Password</label>
+            <div class="password-input-wrap">
+              <input type="password" id="loginPass" class="form-input" placeholder="Password" required autocomplete="current-password">
+              <button type="button" class="btn-toggle-pass" onclick="togglePasswordVisibility()">Show</button>
+            </div>
+          </div>
+
+          <button type="submit" id="btnSubmitLogin" class="btn-login-submit">
+            Sign In to Admin
+          </button>
+
+          <div class="login-back-wrap">
+            <button type="button" class="btn-link" onclick="switchView('public')">
+              ← Return to Public Downloads
+            </button>
+          </div>
+        </form>
+
+        <div class="login-footer">
+          <span>Encrypted Verification (SHA-256)</span>
+          <span>Read-only public protection</span>
+        </div>
+      </div>
+
+      <!-- Authenticated Dashboard -->
+      <div id="adminDashboardBlock" style="display: none;">
+        <div class="admin-header-row">
+          <div class="page-title-block">
+            <h1 class="page-title">Repository Admin</h1>
+            <p class="page-subtitle">Upload files and regenerate the static manifest. Public users never get edit access.</p>
+          </div>
+          <button class="btn-logout" onclick="handleVanillaLogout()">
+            Log out
+          </button>
+        </div>
+
+        <!-- Stat Cards -->
+        <div class="stats-grid">
+          <div class="stat-card">
+            <div id="statFiles" class="stat-value">0</div>
+            <div class="stat-label">Files</div>
+          </div>
+          <div class="stat-card">
+            <div id="statStorage" class="stat-value">0 B</div>
+            <div class="stat-label">Storage</div>
+          </div>
+          <div class="stat-card">
+            <div id="statTypes" class="stat-value">0</div>
+            <div class="stat-label">Types</div>
+          </div>
+        </div>
+
+        <!-- Two-column Admin Panel -->
+        <div class="admin-grid">
+          <!-- Left: Upload files -->
+          <div class="admin-panel-card">
+            <div class="panel-header">
+              <h2 class="panel-title">Upload files</h2>
+              <p class="panel-subtitle">Backend/admin-only workflow. This area is not exposed on the public page.</p>
+            </div>
+
+            <!-- Dropzone -->
+            <div id="dropZone" class="dropzone">
+              <div class="upload-icon">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M12 19V5M5 12l7-7 7 7"/>
+                </svg>
+              </div>
+              <div class="drop-title">Drop installers here</div>
+              <div class="drop-supported">EXE · MSI · DMG · PKG · DEB · RPM · ZIP · ISO</div>
+              <label class="btn-choose">
+                Choose files
+                <input type="file" id="filePicker" multiple style="display: none;">
+              </label>
+            </div>
+
+            <div id="uploadProgressContainer" class="upload-progress-container" style="display: none;">
+              <div class="progress-bar-bg">
+                <div id="uploadProgressBar" class="progress-bar-fill" style="width: 0%;"></div>
+              </div>
+              <div id="uploadProgressText" class="progress-text">Uploading files...</div>
+            </div>
+
+            <!-- Instruction Notice -->
+            <div class="admin-notice-box">
+              After upload: store the file in <strong>/upload/</strong>, then run <strong>generate-index.sh</strong>. No database is required.
+            </div>
+          </div>
+
+          <!-- Right: Recent Uploads -->
+          <div class="admin-panel-card">
+            <div class="panel-header">
+              <h2 class="panel-title">Recent uploads</h2>
+            </div>
+
+            <div id="recentUploadsList" class="recent-list">
+              <!-- Populated via app.js -->
+            </div>
+
+            <button id="btnRegenerate" class="btn-regenerate" onclick="regenerateIndex()">
+              Regenerate index.json
+            </button>
+          </div>
+        </div>
+
+        <!-- Footer -->
+        <footer class="footer-bar">
+          <span class="footer-left">Admin session active (arif)</span>
+          <span class="footer-right">Public side remains read-only</span>
+        </footer>
+      </div>
+    </main>
+  </div>
+
+  <!-- Toast notification -->
+  <div id="toast" class="toast"></div>
+
+  <!-- Command Modal -->
+  <div id="commandModal" class="modal-backdrop" onclick="closeModal(event)">
+    <div class="modal-dialog" onclick="event.stopPropagation()">
+      <div class="modal-header">
+        <h3 id="modalFileTitle" class="modal-title">Download Automation</h3>
+        <button class="modal-close" onclick="closeModal()">&times;</button>
+      </div>
+      <div class="modal-body">
+        <label class="cmd-label">aria2 Multi-Connection Command:</label>
+        <div class="cmd-box">
+          <code id="modalAriaCmd"></code>
+          <button class="btn-cmd-copy" onclick="copyModalAria()">Copy</button>
+        </div>
+
+        <label class="cmd-label">Windows Batch (.bat) Installer Script:</label>
+        <div class="cmd-box">
+          <pre id="modalBatCmd"></pre>
+          <button class="btn-cmd-copy" onclick="copyModalBat()">Copy</button>
+        </div>
+
+        <label class="cmd-label">Direct Download URL:</label>
+        <div class="cmd-box">
+          <code id="modalDirectUrl"></code>
+          <button class="btn-cmd-copy" onclick="copyModalUrl()">Copy</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Verify Modal -->
+  <div id="verifyModal" class="modal-backdrop" onclick="closeVerifyModal(event)">
+    <div class="modal-dialog" onclick="event.stopPropagation()">
+      <div class="modal-header">
+        <h3 id="verifyFileTitle" class="modal-title">File Integrity Check · SHA-256</h3>
+        <button class="modal-close" onclick="closeVerifyModal()">&times;</button>
+      </div>
+      <div class="modal-body">
+        <div id="verifyFileSubtitle" class="text-meta" style="font-size: 13px; color: var(--text-dim); margin-bottom: 12px; font-family: var(--font-mono);"></div>
+
+        <label class="cmd-label">SHA-256 Checksum (64 hex characters):</label>
+        <div class="cmd-box" style="margin-bottom: 14px;">
+          <code id="verifyShaHash" style="word-break: break-all;"></code>
+          <button class="btn-cmd-copy" onclick="copyVerifyHash()">Copy</button>
+        </div>
+
+        <label class="cmd-label">Compare with local hash:</label>
+        <input type="text" id="verifyLocalInput" class="form-input" style="font-family: var(--font-mono); font-size: 12px; margin-bottom: 8px;" placeholder="Paste computed hash from your local system..." oninput="checkLocalHashMatch()">
+        <div id="verifyMatchAlert" style="display: none; font-size: 12px; padding: 8px 12px; border-radius: 6px; margin-bottom: 14px;"></div>
+
+        <label class="cmd-label">Verify in PowerShell:</label>
+        <div class="cmd-box">
+          <code id="verifyPowerShellCmd"></code>
+          <button class="btn-cmd-copy" onclick="copyPowerShellCmd()">Copy</button>
+        </div>
+
+        <label class="cmd-label">Verify in Linux / macOS Terminal:</label>
+        <div class="cmd-box">
+          <code id="verifyLinuxCmd"></code>
+          <button class="btn-cmd-copy" onclick="copyLinuxCmd()">Copy</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="assets/app.js"></script>
+</body>
+</html>
