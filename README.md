@@ -71,11 +71,12 @@ Users can select multiple files simultaneously via checkboxes or the "Select All
 - **PowerShell Script (`download-selected.ps1`)**: Generates a native Windows PowerShell batch downloader with checksum validation.
 - **Copy URLs**: Copies all direct URLs to the clipboard at once.
 
-### Admin File Inventory & Manifest Deletion
-The Admin view includes repository file management controls:
-- **Delete Button**: Each package in the inventory and recent uploads features a dedicated Delete action with confirmation.
-- **State Synchronization**: Deleting a file instantly removes it from the local application state (`files`, `recentUploads`, `selectedFiles`) and recalculates storage metrics and analytics.
-- **Automatic Manifest Update**: Generates an updated `index.json` manifest file immediately upon file deletion to ensure consistency with the repository.
+### Admin Analytics Dashboard (Powered by Recharts)
+The authenticated Admin view provides an interactive traffic & popularity dashboard:
+- **Horizontal BarChart**: Visualizes the most downloaded files ranked by hit count or total bandwidth transferred.
+- **Platform Distribution Donut Chart**: Shows download share breakdown across operating systems (Windows, macOS, Linux, ISO, Archive).
+- **Metric Toggle**: Switch between **Downloads** and **Bandwidth** metrics seamlessly.
+- **High-Contrast Dark Tooltip**: Displays file size, exact hits, total bandwidth served, and category.
 
 ---
 

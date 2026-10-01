@@ -703,25 +703,6 @@ body {
   font-weight: 500;
 }
 
-.btn-delete-item {
-  background: none;
-  border: 1px solid transparent;
-  color: var(--text-dim);
-  padding: 4px;
-  border-radius: var(--radius-sm);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  transition: all 0.15s ease;
-}
-
-.btn-delete-item:hover {
-  color: #f43f5e;
-  background-color: rgba(244, 63, 94, 0.1);
-  border-color: rgba(244, 63, 94, 0.25);
-}
-
 .btn-regenerate {
   width: 100%;
   background-color: #222228;
