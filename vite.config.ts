@@ -10,9 +10,12 @@ export default defineConfig(() => {
   return {
     plugins: [react(), tailwindcss()],
     resolve: {
-      alias: {
-        '@': path.resolve(rootDir, '.'),
-      },
+      alias: [
+        { find: /^@\//, replacement: `${path.resolve(rootDir, 'src')}/` },
+      ],
+    },
+    build: {
+      chunkSizeWarningLimit: 1500,
     },
     server: {
       // HMR is disabled in AI Studio via DISABLE_HMR env var.
