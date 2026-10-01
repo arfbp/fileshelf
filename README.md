@@ -60,6 +60,23 @@ Users can click the **Verify** button next to each package to view the SHA-256 h
   shasum -a 256 Application-2.4.1.dmg
   ```
 
+### Multiple File Batch Download & Automation
+Users can select multiple files simultaneously via checkboxes or the "Select All" toggle:
+- **Download All**: Triggers sequential browser downloads for all selected items.
+- **aria2 list (`aria2-batch.txt`)**: Exports a list of URLs ready for parallel multi-connection downloading:
+  ```bash
+  aria2c -j 4 -c -i aria2-batch.txt
+  ```
+- **Bash Script (`download-selected.sh`)**: Generates an executable shell script with automatic `curl`/`wget` resume and SHA-256 verification.
+- **PowerShell Script (`download-selected.ps1`)**: Generates a native Windows PowerShell batch downloader with checksum validation.
+- **Copy URLs**: Copies all direct URLs to the clipboard at once.
+
+### Admin File Inventory & Manifest Deletion
+The Admin view includes repository file management controls:
+- **Delete Button**: Each package in the inventory and recent uploads features a dedicated Delete action with confirmation.
+- **State Synchronization**: Deleting a file instantly removes it from the local application state (`files`, `recentUploads`, `selectedFiles`) and recalculates storage metrics and analytics.
+- **Automatic Manifest Update**: Generates an updated `index.json` manifest file immediately upon file deletion to ensure consistency with the repository.
+
 ---
 
 ## Deployment with Nginx

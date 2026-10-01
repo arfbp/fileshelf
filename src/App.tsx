@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useMemo } from 'react';
 import { 
   ArrowUp, 
   Copy, 
@@ -19,8 +19,31 @@ import {
   Unlock,
   LogOut,
   Eye,
-  EyeOff
+  EyeOff,
+  CheckSquare,
+  Square,
+  FileDown,
+  ListChecks,
+  BarChart3,
+  TrendingUp,
+  HardDrive,
+  Activity,
+  Trash2,
+  Trash,
+  AlertTriangle
 } from 'lucide-react';
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  Tooltip,
+  ResponsiveContainer,
+  Cell,
+  CartesianGrid,
+  PieChart,
+  Pie
+} from 'recharts';
 
 interface FileItem {
   name: string;
@@ -39,17 +62,93 @@ interface RecentUpload {
   category: string;
 }
 
+// Pure JS SHA-256 Fallback (Ensures authentication works on insecure HTTP / IP address / LAN without HTTPS)
+function jsSha256(ascii: string): string {
+  function rightRotate(value: number, amount: number) {
+    return (value >>> amount) | (value << (32 - amount));
+  }
+  const mathPow = Math.pow;
+  const maxWord = mathPow(2, 32);
+  let i = 0, j = 0;
+  let result = '';
+  const words: number[] = [];
+  const asciiBitLength = ascii.length * 8;
+  const hash: number[] = [];
+  const k: number[] = [];
+  let primeCounter = 0;
+  const isComposite: { [key: number]: number } = {};
+  for (let candidate = 2; primeCounter < 64; candidate++) {
+    if (!isComposite[candidate]) {
+      for (i = 0; i < 313; i += candidate) {
+        isComposite[i] = candidate;
+      }
+      hash[primeCounter] = (mathPow(candidate, 0.5) * maxWord) | 0;
+      k[primeCounter++] = (mathPow(candidate, 1 / 3) * maxWord) | 0;
+    }
+  }
+  ascii += '\x80';
+  while (ascii.length % 64 - 56) ascii += '\x00';
+  for (i = 0; i < ascii.length; i++) {
+    j = ascii.charCodeAt(i);
+    if (j >> 8) return '';
+    words[i >> 2] |= j << ((3 - i) % 4) * 8;
+  }
+  words[words.length] = (asciiBitLength / maxWord) | 0;
+  words[words.length] = asciiBitLength;
+  for (j = 0; j < words.length;) {
+    const w = words.slice(j, j += 16);
+    const oldHash = [...hash];
+    for (i = 0; i < 64; i++) {
+      const w15 = w[i - 15], w2 = w[i - 2];
+      const a = hash[0], e = hash[4];
+      const temp1 = hash[7]
+        + (rightRotate(e, 6) ^ rightRotate(e, 11) ^ rightRotate(e, 25))
+        + ((e & hash[5]) ^ (~e & hash[6]))
+        + k[i]
+        + (w[i] = (i < 16) ? w[i] : (
+            w[i - 16]
+            + (rightRotate(w15, 7) ^ rightRotate(w15, 18) ^ (w15 >>> 3))
+            + w[i - 7]
+            + (rightRotate(w2, 17) ^ rightRotate(w2, 19) ^ (w2 >>> 10))
+          ) | 0
+        );
+      const temp2 = (rightRotate(a, 2) ^ rightRotate(a, 13) ^ rightRotate(a, 22))
+        + ((a & hash[1]) ^ (a & hash[2]) ^ (hash[1] & hash[2]));
+      hash.unshift((temp1 + temp2) | 0);
+      hash.pop();
+      hash[4] = (hash[4] + temp1) | 0;
+    }
+    for (i = 0; i < 8; i++) {
+      hash[i] = (hash[i] + oldHash[i]) | 0;
+    }
+  }
+  for (i = 0; i < 8; i++) {
+    for (j = 3; j + 1; j--) {
+      const b = (hash[i] >> (j * 8)) & 255;
+      result += ((b < 16) ? '0' : '') + b.toString(16);
+    }
+  }
+  return result;
+}
+
 // Security Configuration (Salted SHA-256 hashes of credentials)
 const ADMIN_SALT = 'fileshelf_salt_2026';
 const EXPECTED_USER_HASH = 'ce9a65f46d77cb3f6062cf6e831bc63a5bd0c1f130fe49a9e9ce6a876de860af';
 const EXPECTED_PASS_HASH = '1ffd0f352a199436b81c1f1ef4dfd827e3c05228d7f12a3e634998ccd62ffab8';
 
 async function computeSha256(str: string): Promise<string> {
-  const encoder = new TextEncoder();
-  const data = encoder.encode(str);
-  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
-  const hashArray = Array.from(new Uint8Array(hashBuffer));
-  return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+  try {
+    if (typeof window !== 'undefined' && window.crypto && window.crypto.subtle) {
+      const encoder = new TextEncoder();
+      const data = encoder.encode(str);
+      const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+      const hashArray = Array.from(new Uint8Array(hashBuffer));
+      return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+    }
+  } catch (err) {
+    console.warn('Web Crypto subtle digest failed, using JS SHA-256 fallback:', err);
+  }
+  return jsSha256(str);
 }
 
 async function computeFileSha256(file: File): Promise<string> {
@@ -162,6 +261,85 @@ const INITIAL_RECENT_UPLOADS: RecentUpload[] = [
   { name: 'toolkit-linux.tar.gz', sizeFormatted: '31 MB', timeAgo: '1 hr ago', category: 'Linux' }
 ];
 
+const DEFAULT_DOWNLOAD_COUNTS: Record<string, number> = {
+  "VSCodeUserSetup-x64.exe": 5420,
+  "archlinux-2026.09.01-x86_64.iso": 3890,
+  "docker-desktop.pkg": 3140,
+  "enterprise-installer.msi": 2210,
+  "dev-essentials-bundle.zip": 1840,
+  "toolkit-linux.tar.gz": 1450,
+  "nginx-enterprise.rpm": 1180,
+  "Application-2.4.1.dmg": 980,
+  "GoogleChromeSetup.exe": 4200
+};
+
+const CATEGORY_COLORS: Record<string, string> = {
+  Windows: '#3b82f6',
+  macOS: '#a855f7',
+  Linux: '#10b981',
+  ISO: '#f59e0b',
+  Archive: '#ec4899',
+  Other: '#6b7280'
+};
+
+interface TooltipPayloadItem {
+  payload: {
+    name: string;
+    downloads: number;
+    bandwidthFormatted: string;
+    sizeFormatted: string;
+    category: string;
+    color?: string;
+    value?: number;
+  };
+}
+
+const CustomAnalyticsTooltip = ({ active, payload, metric }: { active?: boolean; payload?: TooltipPayloadItem[]; metric: 'downloads' | 'bandwidth' }) => {
+  if (active && payload && payload.length) {
+    const data = payload[0].payload;
+    return (
+      <div className="bg-[#18181d] border border-neutral-700/80 rounded-lg p-3 shadow-2xl text-xs z-50">
+        <div className="font-semibold text-white truncate max-w-xs mb-1.5">{data.name}</div>
+        <div className="space-y-1 font-mono text-[11px]">
+          <div className="text-neutral-300">
+            Downloads: <span className="text-blue-400 font-bold">{data.downloads.toLocaleString()}</span>
+          </div>
+          <div className="text-neutral-300">
+            Total Bandwidth: <span className="text-emerald-400 font-bold">{data.bandwidthFormatted}</span>
+          </div>
+          <div className="text-neutral-400">
+            File Size: <span className="text-neutral-300">{data.sizeFormatted}</span>
+          </div>
+          <div className="text-neutral-400">
+            Category: <span className="text-neutral-300">{data.category}</span>
+          </div>
+        </div>
+      </div>
+    );
+  }
+  return null;
+};
+
+const CustomPieTooltip = ({ active, payload, total }: { active?: boolean; payload?: TooltipPayloadItem[]; total: number }) => {
+  if (active && payload && payload.length) {
+    const data = payload[0].payload;
+    const value = data.value || data.downloads || 0;
+    const pct = total > 0 ? ((value / total) * 100).toFixed(1) : '0';
+    return (
+      <div className="bg-[#18181d] border border-neutral-700/80 rounded-lg p-2.5 shadow-2xl text-xs z-50">
+        <div className="font-semibold text-white flex items-center gap-1.5">
+          <span className="w-2 h-2 rounded-full" style={{ backgroundColor: data.color || '#3b82f6' }} />
+          {data.name || data.category}
+        </div>
+        <div className="text-neutral-300 font-mono text-[11px] mt-1">
+          {value.toLocaleString()} downloads ({pct}%)
+        </div>
+      </div>
+    );
+  }
+  return null;
+};
+
 function formatBytes(bytes: number): string {
   if (!bytes || bytes === 0) return '0 B';
   const k = 1024;
@@ -194,9 +372,19 @@ function extractType(filename: string): string {
 
 export default function App() {
   const [view, setView] = useState<'public' | 'admin'>('public');
-  const [files, setFiles] = useState<FileItem[]>(INITIAL_FILES);
+  const [files, setFiles] = useState<FileItem[]>(() => {
+    try {
+      const stored = localStorage.getItem('fileshelf_manifest_files');
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch {}
+    return INITIAL_FILES;
+  });
   const [recentUploads, setRecentUploads] = useState<RecentUpload[]>(INITIAL_RECENT_UPLOADS);
   const [searchQuery, setSearchQuery] = useState('');
+  const [adminSearchQuery, setAdminSearchQuery] = useState('');
   const [typeFilter, setTypeFilter] = useState('all');
   const [sortOption, setSortOption] = useState<'name-asc' | 'name-desc' | 'newest' | 'oldest' | 'largest' | 'smallest' | 'type'>('name-asc');
   
@@ -205,8 +393,13 @@ export default function App() {
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [activeModalFile, setActiveModalFile] = useState<FileItem | null>(null);
   const [verifyModalFile, setVerifyModalFile] = useState<FileItem | null>(null);
+  const [fileToDelete, setFileToDelete] = useState<FileItem | null>(null);
   const [userTestHash, setUserTestHash] = useState('');
   const [copiedHash, setCopiedHash] = useState(false);
+
+  // Batch selection states
+  const [selectedFiles, setSelectedFiles] = useState<string[]>([]);
+  const [isDownloadingBatch, setIsDownloadingBatch] = useState(false);
 
   // Admin Authentication states
   const [isAdminAuthenticated, setIsAdminAuthenticated] = useState(() => {
@@ -223,6 +416,75 @@ export default function App() {
   const [uploadProgress, setUploadProgress] = useState<number | null>(null);
   const [uploadStatusText, setUploadStatusText] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Analytics states (seeded with historical realistic downloads & tracking live downloads)
+  const [downloadStats, setDownloadStats] = useState<Record<string, number>>(() => {
+    try {
+      const saved = localStorage.getItem('fileshelf_download_stats');
+      if (saved) return JSON.parse(saved);
+    } catch {}
+    return DEFAULT_DOWNLOAD_COUNTS;
+  });
+  const [analyticsMetric, setAnalyticsMetric] = useState<'downloads' | 'bandwidth'>('downloads');
+
+  const trackFileDownload = (fileName: string) => {
+    setDownloadStats(prev => {
+      const updated = {
+        ...prev,
+        [fileName]: (prev[fileName] || 0) + 1
+      };
+      try {
+        localStorage.setItem('fileshelf_download_stats', JSON.stringify(updated));
+      } catch {}
+      return updated;
+    });
+  };
+
+  // Computed Analytics for Dashboard
+  const analyticsData = useMemo(() => {
+    const mapped = files.map(file => {
+      const count = downloadStats[file.name] || 0;
+      const bandwidthBytes = count * (file.size || 0);
+      return {
+        name: file.name,
+        shortName: file.name.length > 22 ? file.name.slice(0, 20) + '...' : file.name,
+        downloads: count,
+        bandwidthBytes,
+        bandwidthFormatted: formatBytes(bandwidthBytes),
+        category: file.category,
+        sizeFormatted: formatBytes(file.size || 0),
+        color: CATEGORY_COLORS[file.category] || '#6b7280'
+      };
+    });
+
+    const sortedFiles = [...mapped].sort((a, b) => {
+      if (analyticsMetric === 'bandwidth') {
+        return b.bandwidthBytes - a.bandwidthBytes;
+      }
+      return b.downloads - a.downloads;
+    });
+
+    const totalDownloads = mapped.reduce((acc, f) => acc + f.downloads, 0);
+    const totalBandwidthBytes = mapped.reduce((acc, f) => acc + f.bandwidthBytes, 0);
+
+    const categoryMap: Record<string, number> = {};
+    mapped.forEach(f => {
+      categoryMap[f.category] = (categoryMap[f.category] || 0) + f.downloads;
+    });
+
+    const categoryDistribution = Object.entries(categoryMap).map(([category, count]) => ({
+      name: category,
+      value: count,
+      color: CATEGORY_COLORS[category] || '#6b7280'
+    })).sort((a, b) => b.value - a.value);
+
+    return {
+      topFiles: sortedFiles.slice(0, 7),
+      totalDownloads,
+      totalBandwidthFormatted: formatBytes(totalBandwidthBytes),
+      categoryDistribution
+    };
+  }, [files, downloadStats, analyticsMetric]);
 
   // Sync hash with view
   useEffect(() => {
@@ -266,6 +528,146 @@ export default function App() {
     setCopiedId(file.name);
     triggerToast(`Direct URL copied: ${file.name}`);
     setTimeout(() => setCopiedId(null), 2000);
+  };
+
+  // Batch Selection Handlers
+  const toggleSelectFile = (fileName: string) => {
+    setSelectedFiles(prev => 
+      prev.includes(fileName) ? prev.filter(name => name !== fileName) : [...prev, fileName]
+    );
+  };
+
+  const toggleSelectAll = () => {
+    const visibleNames = filteredFiles.map(f => f.name);
+    const allSelected = visibleNames.length > 0 && visibleNames.every(name => selectedFiles.includes(name));
+    if (allSelected) {
+      setSelectedFiles(prev => prev.filter(name => !visibleNames.includes(name)));
+    } else {
+      setSelectedFiles(prev => Array.from(new Set([...prev, ...visibleNames])));
+    }
+  };
+
+  const handleClearSelection = () => {
+    setSelectedFiles([]);
+  };
+
+  const handleBatchDownload = async () => {
+    const selectedList = files.filter(f => selectedFiles.includes(f.name));
+    if (selectedList.length === 0) return;
+    setIsDownloadingBatch(true);
+    triggerToast(`Starting browser download for ${selectedList.length} files...`);
+
+    for (let i = 0; i < selectedList.length; i++) {
+      const file = selectedList[i];
+      trackFileDownload(file.name);
+      const link = document.createElement('a');
+      link.href = file.url || `/upload/${file.name}`;
+      link.download = file.name;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+
+      if (i < selectedList.length - 1) {
+        await new Promise(resolve => setTimeout(resolve, 400));
+      }
+    }
+    setIsDownloadingBatch(false);
+    triggerToast(`Queued ${selectedList.length} file downloads in browser`);
+  };
+
+  const handleExportAria2Batch = () => {
+    const selectedList = files.filter(f => selectedFiles.includes(f.name));
+    if (selectedList.length === 0) return;
+    const lines = [
+      '# FileShelf aria2 batch download list',
+      '# Run command: aria2c -j 4 -c -i aria2-batch.txt',
+      '',
+      ...selectedList.map(f => new URL(f.url || `/upload/${f.name}`, window.location.origin).href)
+    ];
+    const blob = new Blob([lines.join('\n')], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'aria2-batch.txt';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    triggerToast(`Exported aria2 batch file (${selectedList.length} files)`);
+  };
+
+  const handleExportBashScript = () => {
+    const selectedList = files.filter(f => selectedFiles.includes(f.name));
+    if (selectedList.length === 0) return;
+    const commands = [
+      '#!/usr/bin/env bash',
+      '# FileShelf Batch Downloader & Checksum Verifier',
+      '# Generated on ' + new Date().toISOString(),
+      'set -e',
+      '',
+      'echo "==> Downloading ' + selectedList.length + ' package(s) from ' + window.location.origin + '..."',
+      ''
+    ];
+    selectedList.forEach(f => {
+      const fileUrl = new URL(f.url || `/upload/${f.name}`, window.location.origin).href;
+      commands.push(`echo "==> Fetching ${f.name}..."`);
+      commands.push(`curl -C - -LO "${fileUrl}" || wget -c "${fileUrl}"`);
+      if (f.sha256) {
+        commands.push(`echo "${f.sha256}  ${f.name}" | sha256sum --check || echo "Warning: Checksum verification failed for ${f.name}"`);
+      }
+      commands.push('');
+    });
+    commands.push('echo "==> All downloads completed successfully!"');
+    const blob = new Blob([commands.join('\n')], { type: 'text/x-shellscript;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'download-selected.sh';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    triggerToast(`Exported Bash script (${selectedList.length} files)`);
+  };
+
+  const handleExportPowerShellScript = () => {
+    const selectedList = files.filter(f => selectedFiles.includes(f.name));
+    if (selectedList.length === 0) return;
+    const lines = [
+      '# FileShelf PowerShell Batch Downloader',
+      '# Run in PowerShell: .\\download-selected.ps1',
+      'Write-Host "==> Starting batch download of ' + selectedList.length + ' files..." -ForegroundColor Cyan',
+      ''
+    ];
+    selectedList.forEach(f => {
+      const fileUrl = new URL(f.url || `/upload/${f.name}`, window.location.origin).href;
+      lines.push(`Write-Host "Fetching ${f.name}..." -ForegroundColor Yellow`);
+      lines.push(`Invoke-WebRequest -Uri "${fileUrl}" -OutFile "${f.name}"`);
+      if (f.sha256) {
+        lines.push(`$localHash = (Get-FileHash .\\${f.name} -Algorithm SHA256).Hash.ToLower()`);
+        lines.push(`if ($localHash -eq "${f.sha256.toLowerCase()}") { Write-Host "Verified SHA256 for ${f.name}: MATCH" -ForegroundColor Green } else { Write-Warning "Checksum mismatch for ${f.name}!" }`);
+      }
+      lines.push('');
+    });
+    lines.push('Write-Host "==> All downloads completed!" -ForegroundColor Green');
+    const blob = new Blob([lines.join('\r\n')], { type: 'text/plain;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = 'download-selected.ps1';
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    triggerToast(`Exported PowerShell script (${selectedList.length} files)`);
+  };
+
+  const handleCopySelectedUrls = () => {
+    const selectedList = files.filter(f => selectedFiles.includes(f.name));
+    if (selectedList.length === 0) return;
+    const urls = selectedList.map(f => new URL(f.url || `/upload/${f.name}`, window.location.origin).href).join('\n');
+    navigator.clipboard.writeText(urls);
+    triggerToast(`Copied ${selectedList.length} direct URLs to clipboard`);
   };
 
   // Switch view helper
@@ -353,7 +755,13 @@ export default function App() {
       setUploadProgress(100);
       setUploadStatusText(`Staged ${fileList.length} file(s) with SHA-256`);
 
-      setFiles(prev => [...stagedResults.map(r => r.item), ...prev]);
+      setFiles(prev => {
+        const updated = [...stagedResults.map(r => r.item), ...prev];
+        try {
+          localStorage.setItem('fileshelf_manifest_files', JSON.stringify(updated));
+        } catch {}
+        return updated;
+      });
       setRecentUploads(prev => [...stagedResults.map(r => r.recent), ...prev]);
       triggerToast(`Staged ${fileList.length} installer file(s) with SHA-256 checksum.`);
 
@@ -381,18 +789,44 @@ export default function App() {
     processFiles(e.dataTransfer.files);
   };
 
-  // Regenerate index.json
-  const handleRegenerate = () => {
-    triggerToast('Generated fresh index.json manifest.');
-    
-    // Provide export
-    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(files, null, 2));
+  // Trigger manifest file download / regeneration helper
+  const triggerManifestUpdate = (updatedFilesList: FileItem[], actionDesc: string) => {
+    try {
+      localStorage.setItem('fileshelf_manifest_files', JSON.stringify(updatedFilesList));
+    } catch {}
+
+    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(updatedFilesList, null, 2));
     const downloadAnchor = document.createElement('a');
     downloadAnchor.setAttribute("href", dataStr);
     downloadAnchor.setAttribute("download", "index.json");
     document.body.appendChild(downloadAnchor);
     downloadAnchor.click();
     downloadAnchor.remove();
+
+    triggerToast(`${actionDesc}. index.json manifest updated (${updatedFilesList.length} files remaining).`);
+  };
+
+  // Delete file from local application state & trigger manifest update
+  const confirmDeleteFile = (file: FileItem) => {
+    const updated = files.filter(f => f.name !== file.name);
+    setFiles(updated);
+    
+    // Also remove from selectedFiles if selected
+    setSelectedFiles(prev => prev.filter(name => name !== file.name));
+    
+    // Also remove from recentUploads if present
+    setRecentUploads(prev => prev.filter(r => r.name !== file.name));
+
+    // Close modal
+    setFileToDelete(null);
+
+    // Trigger manifest update & download
+    triggerManifestUpdate(updated, `Deleted "${file.name}"`);
+  };
+
+  // Regenerate index.json
+  const handleRegenerate = () => {
+    triggerManifestUpdate(files, 'Regenerated fresh index.json');
   };
 
   // Filter & Sort computation
@@ -481,7 +915,7 @@ export default function App() {
             </div>
 
             {/* Controls Bar */}
-            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 mb-6">
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 mb-4">
               {/* Search input */}
               <div className="relative flex-1">
                 <input
@@ -528,6 +962,39 @@ export default function App() {
               </div>
             </div>
 
+            {/* Batch Selection Header Sub-bar */}
+            <div className="flex items-center justify-between px-2 py-1.5 mb-2.5 text-xs text-neutral-400">
+              <button
+                onClick={toggleSelectAll}
+                className="flex items-center gap-2 hover:text-white transition-colors cursor-pointer select-none group"
+              >
+                {filteredFiles.length > 0 && filteredFiles.every(f => selectedFiles.includes(f.name)) ? (
+                  <CheckSquare size={16} className="text-blue-400" />
+                ) : (
+                  <Square size={16} className="text-neutral-500 group-hover:text-neutral-300" />
+                )}
+                <span>
+                  {filteredFiles.length > 0 && filteredFiles.every(f => selectedFiles.includes(f.name))
+                    ? 'Deselect all visible'
+                    : `Select all (${filteredFiles.length})`}
+                </span>
+              </button>
+
+              {selectedFiles.length > 0 && (
+                <div className="flex items-center gap-3">
+                  <span className="text-neutral-300 font-medium font-mono text-[11px] sm:text-xs">
+                    {selectedFiles.length} file{selectedFiles.length > 1 ? 's' : ''} selected ({formatBytes(files.filter(f => selectedFiles.includes(f.name)).reduce((a, b) => a + (b.size || 0), 0))})
+                  </span>
+                  <button
+                    onClick={handleClearSelection}
+                    className="text-neutral-400 hover:text-red-400 transition-colors cursor-pointer underline text-[11px]"
+                  >
+                    Clear
+                  </button>
+                </div>
+              )}
+            </div>
+
             {/* File List */}
             <div className="space-y-2.5 mb-6">
               {filteredFiles.length === 0 ? (
@@ -540,14 +1007,31 @@ export default function App() {
                   const dateStr = file.modified ? file.modified.slice(0, 10) : '';
                   const sizeStr = formatBytes(file.size);
                   const isCopied = copiedId === file.name;
+                  const isSelected = selectedFiles.includes(file.name);
 
                   return (
                     <div
                       key={file.name}
-                      className="bg-[#19191d] hover:bg-[#1f1f25] border border-neutral-800/90 rounded-xl p-3.5 sm:p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4 transition-colors"
+                      className={`bg-[#19191d] hover:bg-[#1f1f25] border ${
+                        isSelected ? 'border-blue-500/70 bg-[#161a24]' : 'border-neutral-800/90'
+                      } rounded-xl p-3.5 sm:p-4 flex flex-col sm:flex-row sm:items-center justify-between gap-3 sm:gap-4 transition-colors`}
                     >
-                      {/* Left side info */}
-                      <div className="flex items-center gap-3.5 min-w-0">
+                      {/* Left side info with Selection Checkbox */}
+                      <div className="flex items-center gap-3 min-w-0">
+                        {/* Checkbox */}
+                        <button
+                          onClick={() => toggleSelectFile(file.name)}
+                          className="text-neutral-500 hover:text-neutral-200 transition-colors p-1 cursor-pointer shrink-0"
+                          title={isSelected ? 'Deselect file' : 'Select file'}
+                          aria-label={`Select ${file.name}`}
+                        >
+                          {isSelected ? (
+                            <CheckSquare size={18} className="text-blue-400" />
+                          ) : (
+                            <Square size={18} className="text-neutral-600 hover:text-neutral-400" />
+                          )}
+                        </button>
+
                         {/* File Extension Badge Box */}
                         <div className="w-11 h-11 rounded-lg bg-[#222227] border border-neutral-700/60 flex items-center justify-center font-mono font-bold text-xs text-neutral-300 shrink-0">
                           {typeLabel}
@@ -591,6 +1075,7 @@ export default function App() {
                         <a
                           href={file.url || `/upload/${file.name}`}
                           download={file.name}
+                          onClick={() => trackFileDownload(file.name)}
                           className="bg-[#242429] hover:bg-[#2e2e35] border border-neutral-700/70 text-neutral-200 hover:text-white text-xs font-medium px-4 py-2 rounded-lg transition-colors flex items-center gap-1.5 cursor-pointer"
                         >
                           <Download size={13} />
@@ -616,6 +1101,87 @@ export default function App() {
             <div className="border border-neutral-800/80 rounded-xl p-4 bg-[#121215]/80 text-xs text-neutral-400 mb-6">
               Read-only repository · Files cannot be modified or deleted from this page. Downloads use direct <code className="text-neutral-300 font-mono">/upload/</code> URLs.
             </div>
+
+            {/* Floating Batch Action Bar */}
+            {selectedFiles.length > 0 && (
+              <div className="fixed bottom-6 left-1/2 -translate-x-1/2 z-40 w-[94%] max-w-4xl bg-[#141418]/95 backdrop-blur-md border border-neutral-700/80 rounded-2xl shadow-2xl p-3 sm:px-5 sm:py-3.5 flex flex-col md:flex-row items-center justify-between gap-3 animate-in fade-in slide-in-from-bottom-4 duration-200">
+                <div className="flex items-center gap-3">
+                  <div className="w-8 h-8 rounded-lg bg-blue-500/20 border border-blue-500/30 flex items-center justify-center text-blue-400 shrink-0">
+                    <ListChecks size={16} />
+                  </div>
+                  <div>
+                    <div className="text-xs sm:text-sm font-semibold text-white">
+                      {selectedFiles.length} file{selectedFiles.length > 1 ? 's' : ''} selected
+                    </div>
+                    <div className="text-[11px] text-neutral-400 font-mono">
+                      Total: {formatBytes(files.filter(f => selectedFiles.includes(f.name)).reduce((a, b) => a + (b.size || 0), 0))}
+                    </div>
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap items-center gap-2 justify-end w-full md:w-auto">
+                  {/* Browser Download All */}
+                  <button
+                    onClick={handleBatchDownload}
+                    disabled={isDownloadingBatch}
+                    className="bg-emerald-600 hover:bg-emerald-500 disabled:opacity-50 text-white text-xs font-semibold px-3.5 py-2 rounded-lg transition-colors flex items-center gap-1.5 shadow-sm cursor-pointer"
+                    title="Download all selected files sequentially in your browser"
+                  >
+                    <Download size={14} />
+                    <span>{isDownloadingBatch ? 'Downloading...' : 'Download All'}</span>
+                  </button>
+
+                  {/* Export aria2 list */}
+                  <button
+                    onClick={handleExportAria2Batch}
+                    className="bg-[#242429] hover:bg-[#2e2e35] border border-neutral-700 text-neutral-200 hover:text-white text-xs font-medium px-3 py-2 rounded-lg transition-colors flex items-center gap-1.5 cursor-pointer"
+                    title="Export URL list file for aria2c (aria2c -j 4 -i aria2-batch.txt)"
+                  >
+                    <FileDown size={14} className="text-purple-400" />
+                    <span>aria2 list</span>
+                  </button>
+
+                  {/* Export Bash Script */}
+                  <button
+                    onClick={handleExportBashScript}
+                    className="bg-[#242429] hover:bg-[#2e2e35] border border-neutral-700 text-neutral-200 hover:text-white text-xs font-medium px-3 py-2 rounded-lg transition-colors flex items-center gap-1.5 cursor-pointer"
+                    title="Generate download-selected.sh bash script"
+                  >
+                    <Terminal size={14} className="text-emerald-400" />
+                    <span>Bash (.sh)</span>
+                  </button>
+
+                  {/* Export PowerShell Script */}
+                  <button
+                    onClick={handleExportPowerShellScript}
+                    className="bg-[#242429] hover:bg-[#2e2e35] border border-neutral-700 text-neutral-200 hover:text-white text-xs font-medium px-3 py-2 rounded-lg transition-colors flex items-center gap-1.5 cursor-pointer"
+                    title="Generate download-selected.ps1 PowerShell script"
+                  >
+                    <Terminal size={14} className="text-blue-400" />
+                    <span>PowerShell (.ps1)</span>
+                  </button>
+
+                  {/* Copy URLs */}
+                  <button
+                    onClick={handleCopySelectedUrls}
+                    className="bg-[#242429] hover:bg-[#2e2e35] border border-neutral-700 text-neutral-200 hover:text-white text-xs font-medium px-3 py-2 rounded-lg transition-colors flex items-center gap-1.5 cursor-pointer"
+                    title="Copy all direct download links to clipboard"
+                  >
+                    <Copy size={13} />
+                    <span>Copy URLs</span>
+                  </button>
+
+                  {/* Clear Selection */}
+                  <button
+                    onClick={handleClearSelection}
+                    className="p-2 text-neutral-400 hover:text-white hover:bg-neutral-800 rounded-lg transition-colors cursor-pointer"
+                    title="Clear selection"
+                  >
+                    <X size={15} />
+                  </button>
+                </div>
+              </div>
+            )}
 
             {/* Footer */}
             <footer className="flex items-center justify-between text-xs text-neutral-500 pt-2 border-t border-neutral-800/60">
@@ -745,32 +1311,214 @@ export default function App() {
                   </button>
                 </div>
 
-                {/* Stats 3-card Grid */}
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
-                  <div className="bg-[#1a1a1e] border border-neutral-800/80 rounded-xl p-5">
+                {/* Stats 4-card Grid */}
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3.5 mb-6">
+                  <div className="bg-[#1a1a1e] border border-neutral-800/80 rounded-xl p-4 sm:p-5">
                     <div className="text-2xl sm:text-3xl font-bold text-white font-mono tabular-nums">
                       {totalFiles}
                     </div>
-                    <div className="text-xs text-neutral-400 mt-1">
-                      Files
+                    <div className="text-xs text-neutral-400 mt-1 flex items-center gap-1.5">
+                      <FileBox size={13} className="text-blue-400" />
+                      <span>Stored Files</span>
                     </div>
                   </div>
 
-                  <div className="bg-[#1a1a1e] border border-neutral-800/80 rounded-xl p-5">
+                  <div className="bg-[#1a1a1e] border border-neutral-800/80 rounded-xl p-4 sm:p-5">
                     <div className="text-2xl sm:text-3xl font-bold text-white font-mono tabular-nums">
                       {totalStorageFormatted}
                     </div>
-                    <div className="text-xs text-neutral-400 mt-1">
-                      Storage
+                    <div className="text-xs text-neutral-400 mt-1 flex items-center gap-1.5">
+                      <HardDrive size={13} className="text-purple-400" />
+                      <span>Total Storage</span>
                     </div>
                   </div>
 
-                  <div className="bg-[#1a1a1e] border border-neutral-800/80 rounded-xl p-5">
-                    <div className="text-2xl sm:text-3xl font-bold text-white font-mono tabular-nums">
-                      {uniqueTypesCount}
+                  <div className="bg-[#1a1a1e] border border-neutral-800/80 rounded-xl p-4 sm:p-5">
+                    <div className="text-2xl sm:text-3xl font-bold text-white font-mono tabular-nums text-emerald-400">
+                      {analyticsData.totalDownloads.toLocaleString()}
                     </div>
-                    <div className="text-xs text-neutral-400 mt-1">
-                      Types
+                    <div className="text-xs text-neutral-400 mt-1 flex items-center gap-1.5">
+                      <Download size={13} className="text-emerald-400" />
+                      <span>Total Downloads</span>
+                    </div>
+                  </div>
+
+                  <div className="bg-[#1a1a1e] border border-neutral-800/80 rounded-xl p-4 sm:p-5">
+                    <div className="text-2xl sm:text-3xl font-bold text-white font-mono tabular-nums text-blue-400">
+                      {analyticsData.totalBandwidthFormatted}
+                    </div>
+                    <div className="text-xs text-neutral-400 mt-1 flex items-center gap-1.5">
+                      <Activity size={13} className="text-blue-400" />
+                      <span>Bandwidth Served</span>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Download Analytics Dashboard (Recharts) */}
+                <div className="bg-[#1a1a1e] border border-neutral-800/80 rounded-xl p-5 sm:p-6 mb-6">
+                  {/* Header & Controls */}
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <BarChart3 size={18} className="text-blue-400" />
+                        <h2 className="font-bold text-base sm:text-lg text-white">
+                          Download Activity & Analytics
+                        </h2>
+                      </div>
+                      <p className="text-xs text-neutral-400 mt-1">
+                        Package distribution and traffic metrics powered by Recharts.
+                      </p>
+                    </div>
+
+                    {/* Metric Toggle & Reset */}
+                    <div className="flex items-center gap-2 self-start sm:self-center">
+                      <div className="flex bg-[#121215] border border-neutral-800 rounded-lg p-1 text-xs">
+                        <button
+                          type="button"
+                          onClick={() => setAnalyticsMetric('downloads')}
+                          className={`px-3 py-1.5 rounded-md font-medium transition-colors cursor-pointer ${
+                            analyticsMetric === 'downloads'
+                              ? 'bg-[#272730] text-white border border-neutral-700/80 shadow-sm'
+                              : 'text-neutral-400 hover:text-neutral-200'
+                          }`}
+                        >
+                          Downloads
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setAnalyticsMetric('bandwidth')}
+                          className={`px-3 py-1.5 rounded-md font-medium transition-colors cursor-pointer ${
+                            analyticsMetric === 'bandwidth'
+                              ? 'bg-[#272730] text-white border border-neutral-700/80 shadow-sm'
+                              : 'text-neutral-400 hover:text-neutral-200'
+                          }`}
+                        >
+                          Bandwidth
+                        </button>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setDownloadStats(DEFAULT_DOWNLOAD_COUNTS);
+                          localStorage.setItem('fileshelf_download_stats', JSON.stringify(DEFAULT_DOWNLOAD_COUNTS));
+                          triggerToast('Reset download statistics to baseline');
+                        }}
+                        className="bg-[#202025] hover:bg-[#2a2a30] border border-neutral-700/80 text-neutral-400 hover:text-white p-2 rounded-lg transition-colors cursor-pointer"
+                        title="Reset statistics to baseline"
+                      >
+                        <RefreshCw size={13} />
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Charts Grid */}
+                  <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
+                    {/* Left Chart: Most Downloaded Files BarChart */}
+                    <div className="lg:col-span-8 bg-[#141418] border border-neutral-800/80 rounded-xl p-4 sm:p-5">
+                      <div className="flex items-center justify-between mb-4">
+                        <div className="flex items-center gap-2 text-xs font-semibold text-neutral-200">
+                          <TrendingUp size={14} className="text-emerald-400" />
+                          <span>Most Downloaded Packages</span>
+                        </div>
+                        <span className="text-[11px] text-neutral-400 font-mono">
+                          {analyticsMetric === 'downloads' ? 'Ranked by Total Hits' : 'Ranked by Bandwidth Transferred'}
+                        </span>
+                      </div>
+
+                      <div className="h-[270px] w-full">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <BarChart
+                            data={analyticsData.topFiles}
+                            layout="vertical"
+                            margin={{ top: 0, right: 25, left: 10, bottom: 0 }}
+                          >
+                            <CartesianGrid strokeDasharray="3 3" stroke="#22222b" horizontal={false} />
+                            <XAxis
+                              type="number"
+                              stroke="#52525e"
+                              fontSize={11}
+                              tickLine={false}
+                              tickFormatter={(v) =>
+                                analyticsMetric === 'downloads'
+                                  ? (v >= 1000 ? `${(v / 1000).toFixed(1)}k` : v)
+                                  : formatBytes(v)
+                              }
+                            />
+                            <YAxis
+                              type="category"
+                              dataKey="shortName"
+                              stroke="#9ca3af"
+                              fontSize={11}
+                              tickLine={false}
+                              axisLine={false}
+                              width={140}
+                            />
+                            <Tooltip content={<CustomAnalyticsTooltip metric={analyticsMetric} />} />
+                            <Bar
+                              dataKey={analyticsMetric === 'downloads' ? 'downloads' : 'bandwidthBytes'}
+                              radius={[0, 4, 4, 0]}
+                            >
+                              {analyticsData.topFiles.map((entry, index) => (
+                                <Cell key={`cell-${index}`} fill={entry.color || '#3b82f6'} />
+                              ))}
+                            </Bar>
+                          </BarChart>
+                        </ResponsiveContainer>
+                      </div>
+                    </div>
+
+                    {/* Right Chart: Platform Distribution Donut Chart */}
+                    <div className="lg:col-span-4 bg-[#141418] border border-neutral-800/80 rounded-xl p-4 sm:p-5 flex flex-col justify-between">
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center gap-2 text-xs font-semibold text-neutral-200">
+                          <Activity size={14} className="text-purple-400" />
+                          <span>Platform Share</span>
+                        </div>
+                        <span className="text-[11px] text-neutral-400 font-mono">
+                          OS / Type
+                        </span>
+                      </div>
+
+                      <div className="h-[175px] w-full flex items-center justify-center">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <PieChart>
+                            <Tooltip content={<CustomPieTooltip total={analyticsData.totalDownloads} />} />
+                            <Pie
+                              data={analyticsData.categoryDistribution}
+                              dataKey="value"
+                              nameKey="name"
+                              cx="50%"
+                              cy="50%"
+                              innerRadius={46}
+                              outerRadius={70}
+                              paddingAngle={3}
+                            >
+                              {analyticsData.categoryDistribution.map((entry, index) => (
+                                <Cell key={`pie-cell-${index}`} fill={entry.color} />
+                              ))}
+                            </Pie>
+                          </PieChart>
+                        </ResponsiveContainer>
+                      </div>
+
+                      {/* Distribution Badges */}
+                      <div className="grid grid-cols-2 gap-x-3 gap-y-2 mt-2 pt-3 border-t border-neutral-800/70 text-[11px]">
+                        {analyticsData.categoryDistribution.map((item) => {
+                          const pct = analyticsData.totalDownloads > 0
+                            ? Math.round((item.value / analyticsData.totalDownloads) * 100)
+                            : 0;
+                          return (
+                            <div key={item.name} className="flex items-center justify-between gap-1.5 min-w-0">
+                              <span className="flex items-center gap-1.5 truncate">
+                                <span className="w-2 h-2 rounded-full shrink-0" style={{ backgroundColor: item.color }} />
+                                <span className="text-neutral-300 truncate">{item.name}</span>
+                              </span>
+                              <span className="text-neutral-500 font-mono shrink-0">{pct}%</span>
+                            </div>
+                          );
+                        })}
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -866,10 +1614,32 @@ export default function App() {
                               </div>
                             </div>
 
-                            {/* Category Pill */}
-                            <span className="shrink-0 text-[11px] font-medium px-2.5 py-0.5 rounded-full bg-neutral-800/70 border border-neutral-700/60 text-neutral-300">
-                              {item.category}
-                            </span>
+                            <div className="flex items-center gap-2 shrink-0">
+                              {/* Category Pill */}
+                              <span className="text-[11px] font-medium px-2.5 py-0.5 rounded-full bg-neutral-800/70 border border-neutral-700/60 text-neutral-300">
+                                {item.category}
+                              </span>
+
+                              {/* Delete recent item */}
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const target = files.find(f => f.name === item.name) || {
+                                    name: item.name,
+                                    type: 'bin',
+                                    category: item.category as any,
+                                    size: 0,
+                                    modified: new Date().toISOString(),
+                                    url: `/upload/${item.name}`
+                                  };
+                                  setFileToDelete(target);
+                                }}
+                                className="text-neutral-500 hover:text-rose-400 p-1.5 rounded-lg hover:bg-rose-500/10 transition-colors cursor-pointer"
+                                title={`Delete ${item.name} from repository`}
+                              >
+                                <Trash2 size={13} />
+                              </button>
+                            </div>
                           </div>
                         ))}
                       </div>
@@ -881,8 +1651,109 @@ export default function App() {
                       className="w-full bg-[#202024] hover:bg-[#29292e] border border-neutral-700/80 text-white font-medium text-xs sm:text-sm py-2.5 px-4 rounded-lg transition-colors cursor-pointer flex items-center justify-center gap-2"
                     >
                       <RefreshCw size={14} />
-                      <span>Regenerate index.json</span>
+                      <span>Regenerate & Export index.json</span>
                     </button>
+                  </div>
+                </div>
+
+                {/* Repository File Inventory & Manifest Management Table */}
+                <div className="bg-[#1a1a1e] border border-neutral-800/80 rounded-xl p-5 mb-6">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <FileBox size={18} className="text-blue-400" />
+                        <h2 className="font-bold text-base text-white">
+                          Repository File Inventory
+                        </h2>
+                        <span className="bg-neutral-800 text-neutral-300 border border-neutral-700/60 text-xs px-2 py-0.5 rounded-full font-mono">
+                          {files.length}
+                        </span>
+                      </div>
+                      <p className="text-xs text-neutral-400 mt-1">
+                        Active packages in the local repository state. Click Delete to remove from state and auto-update index.json.
+                      </p>
+                    </div>
+
+                    <div className="flex items-center gap-2.5 w-full sm:w-auto">
+                      <div className="relative flex-1 sm:w-64">
+                        <input
+                          type="text"
+                          value={adminSearchQuery}
+                          onChange={(e) => setAdminSearchQuery(e.target.value)}
+                          placeholder="Filter repository files..."
+                          className="w-full bg-[#141418] border border-neutral-800 rounded-lg px-3 py-1.5 text-xs text-white placeholder-neutral-500 focus:outline-none focus:border-neutral-600 transition-colors"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Admin File List */}
+                  <div className="divide-y divide-neutral-800/80 max-h-[380px] overflow-y-auto pr-1">
+                    {files.filter(f => f.name.toLowerCase().includes(adminSearchQuery.toLowerCase()) || f.category.toLowerCase().includes(adminSearchQuery.toLowerCase())).length === 0 ? (
+                      <div className="py-8 text-center text-xs text-neutral-500 font-mono">
+                        No files matching "{adminSearchQuery}".
+                      </div>
+                    ) : (
+                      files
+                        .filter(f => f.name.toLowerCase().includes(adminSearchQuery.toLowerCase()) || f.category.toLowerCase().includes(adminSearchQuery.toLowerCase()))
+                        .map((file) => {
+                          const typeLabel = (file.type || extractType(file.name)).toUpperCase();
+                          const dateStr = file.modified ? file.modified.slice(0, 10) : '';
+                          const sizeStr = formatBytes(file.size);
+
+                          return (
+                            <div
+                              key={file.name}
+                              className="py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:bg-[#16161b]/60 px-2 rounded-lg transition-colors"
+                            >
+                              <div className="flex items-center gap-3 min-w-0">
+                                <div className="w-9 h-9 rounded-lg bg-[#222227] border border-neutral-700/60 flex items-center justify-center font-mono font-bold text-[11px] text-neutral-300 shrink-0">
+                                  {typeLabel}
+                                </div>
+                                <div className="min-w-0">
+                                  <div className="font-semibold text-xs sm:text-sm text-white truncate" title={file.name}>
+                                    {file.name}
+                                  </div>
+                                  <div className="text-[11px] text-neutral-400 mt-0.5 font-mono">
+                                    {file.category} · {sizeStr} · {dateStr}
+                                  </div>
+                                </div>
+                              </div>
+
+                              <div className="flex items-center gap-2 self-end sm:self-center shrink-0">
+                                <button
+                                  type="button"
+                                  onClick={() => handleCopyUrl(file)}
+                                  className="bg-[#242429] hover:bg-[#2e2e35] border border-neutral-700/70 text-neutral-300 text-xs px-2.5 py-1.5 rounded-lg transition-colors cursor-pointer"
+                                  title="Copy URL"
+                                >
+                                  <Copy size={12} />
+                                </button>
+
+                                <a
+                                  href={file.url || `/upload/${file.name}`}
+                                  download={file.name}
+                                  className="bg-[#242429] hover:bg-[#2e2e35] border border-neutral-700/70 text-neutral-300 text-xs px-2.5 py-1.5 rounded-lg transition-colors cursor-pointer"
+                                  title="Download"
+                                >
+                                  <Download size={12} />
+                                </a>
+
+                                {/* Delete Button */}
+                                <button
+                                  type="button"
+                                  onClick={() => setFileToDelete(file)}
+                                  className="bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/30 text-rose-400 hover:text-rose-300 text-xs font-medium px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1.5 cursor-pointer shadow-sm"
+                                  title={`Delete ${file.name} from repository`}
+                                >
+                                  <Trash2 size={13} />
+                                  <span>Delete</span>
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        })
+                    )}
                   </div>
                 </div>
 
@@ -1130,6 +2001,72 @@ start /wait ${activeModalFile.name}`}
               </div>
             </div>
 
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {fileToDelete && (
+        <div 
+          className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50 animate-in fade-in duration-150 backdrop-blur-sm"
+          onClick={() => setFileToDelete(null)}
+        >
+          <div 
+            className="bg-[#18181d] border border-neutral-700/90 rounded-2xl p-6 max-w-md w-full shadow-2xl relative"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start gap-3.5 mb-4">
+              <div className="w-10 h-10 rounded-xl bg-rose-500/10 border border-rose-500/30 flex items-center justify-center text-rose-400 shrink-0">
+                <AlertTriangle size={20} />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-white">
+                  Delete File from Repository?
+                </h3>
+                <p className="text-xs text-neutral-400 mt-1 leading-relaxed">
+                  Are you sure you want to remove <strong className="text-neutral-200 font-mono">{fileToDelete.name}</strong>?
+                </p>
+              </div>
+            </div>
+
+            <div className="bg-[#121215] border border-neutral-800 rounded-xl p-3.5 mb-5 text-xs font-mono space-y-1">
+              <div className="flex justify-between text-neutral-400">
+                <span>Category:</span>
+                <span className="text-neutral-200 font-sans">{fileToDelete.category}</span>
+              </div>
+              <div className="flex justify-between text-neutral-400">
+                <span>File Size:</span>
+                <span className="text-neutral-200">{formatBytes(fileToDelete.size)}</span>
+              </div>
+              {fileToDelete.sha256 && (
+                <div className="flex justify-between text-neutral-400 truncate gap-2">
+                  <span>SHA-256:</span>
+                  <span className="text-neutral-300 truncate max-w-[200px]">{fileToDelete.sha256.slice(0, 16)}...</span>
+                </div>
+              )}
+            </div>
+
+            <p className="text-[11px] text-neutral-400 mb-5 leading-normal">
+              This will immediately remove the file from the local application state and automatically trigger an update and download of the <strong className="text-neutral-200 font-mono">index.json</strong> manifest.
+            </p>
+
+            <div className="flex items-center justify-end gap-2.5">
+              <button
+                type="button"
+                onClick={() => setFileToDelete(null)}
+                className="bg-[#242429] hover:bg-[#2e2e35] border border-neutral-700 text-neutral-300 text-xs font-medium px-4 py-2 rounded-lg transition-colors cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => confirmDeleteFile(fileToDelete)}
+                className="bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold px-4 py-2 rounded-lg transition-colors flex items-center gap-1.5 shadow-sm cursor-pointer"
+              >
+                <Trash2 size={13} />
+                <span>Delete & Update Manifest</span>
+              </button>
+            </div>
           </div>
         </div>
       )}

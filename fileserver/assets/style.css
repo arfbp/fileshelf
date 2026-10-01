@@ -189,6 +189,54 @@ body {
   border-color: #52525e;
 }
 
+/* Batch Selection Toolbar */
+.batch-select-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 4px 6px 10px 6px;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.select-all-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  user-select: none;
+}
+
+.select-all-label input[type="checkbox"] {
+  cursor: pointer;
+  accent-color: var(--accent-blue);
+  width: 15px;
+  height: 15px;
+}
+
+.selection-summary {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: #d4d4d8;
+}
+
+.btn-clear-selection {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: 11px;
+  cursor: pointer;
+  text-decoration: underline;
+  padding: 0;
+}
+
+.btn-clear-selection:hover {
+  color: #ef4444;
+}
+
 /* File List */
 .file-list {
   display: flex;
@@ -205,11 +253,140 @@ body {
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-md);
   padding: 14px 18px;
-  transition: background-color 0.15s ease;
+  transition: all 0.15s ease;
 }
 
 .file-row:hover {
   background-color: #1e1e24;
+}
+
+.file-row.file-row-selected {
+  border-color: rgba(59, 130, 246, 0.6);
+  background-color: #171d29;
+}
+
+.file-row-checkbox-wrap {
+  display: flex;
+  align-items: center;
+  margin-right: -4px;
+}
+
+.file-checkbox {
+  cursor: pointer;
+  accent-color: var(--accent-blue);
+  width: 16px;
+  height: 16px;
+}
+
+/* Floating Batch Action Bar */
+.floating-batch-bar {
+  position: fixed;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 1000;
+  width: 92%;
+  max-width: 860px;
+  background-color: rgba(22, 22, 27, 0.95);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(82, 82, 94, 0.7);
+  border-radius: 16px;
+  padding: 12px 20px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  box-shadow: 0 20px 40px rgba(0, 0, 0, 0.6);
+  animation: slideUpBatch 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes slideUpBatch {
+  from {
+    opacity: 0;
+    transform: translate(-50%, 20px);
+  }
+  to {
+    opacity: 1;
+    transform: translate(-50%, 0);
+  }
+}
+
+.batch-bar-info {
+  display: flex;
+  flex-direction: column;
+}
+
+.batch-bar-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #ffffff;
+}
+
+.batch-bar-size {
+  font-size: 11px;
+  font-family: var(--font-mono);
+  color: var(--text-muted);
+}
+
+.batch-bar-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.btn-batch-primary {
+  background-color: #059669;
+  border: 1px solid #10b981;
+  color: #ffffff;
+  border-radius: var(--radius-sm);
+  padding: 8px 14px;
+  font-size: 12px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  transition: background-color 0.15s ease;
+}
+
+.btn-batch-primary:hover {
+  background-color: #10b981;
+}
+
+.btn-batch-secondary {
+  background-color: #24242b;
+  border: 1px solid var(--border-subtle);
+  color: #e4e4e7;
+  border-radius: var(--radius-sm);
+  padding: 8px 12px;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-batch-secondary:hover {
+  background-color: #2e2e38;
+  color: #ffffff;
+  border-color: #52525e;
+}
+
+.btn-batch-close {
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  font-size: 20px;
+  line-height: 1;
+  padding: 4px 8px;
+  cursor: pointer;
+  border-radius: var(--radius-sm);
+}
+
+.btn-batch-close:hover {
+  color: #ffffff;
+  background-color: #27272f;
 }
 
 .file-info-group {
@@ -524,6 +701,25 @@ body {
   border: 1px solid #33333d;
   color: #d4d4d8;
   font-weight: 500;
+}
+
+.btn-delete-item {
+  background: none;
+  border: 1px solid transparent;
+  color: var(--text-dim);
+  padding: 4px;
+  border-radius: var(--radius-sm);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.btn-delete-item:hover {
+  color: #f43f5e;
+  background-color: rgba(244, 63, 94, 0.1);
+  border-color: rgba(244, 63, 94, 0.25);
 }
 
 .btn-regenerate {

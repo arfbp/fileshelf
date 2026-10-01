@@ -107,6 +107,202 @@ function updateStats() {
   if (statTypesEl) statTypesEl.textContent = uniqueTypes;
 }
 
+// Batch Multi-Selection State
+let vanillaSelectedFiles = new Set();
+
+function toggleVanillaSelectFile(fileName) {
+  if (vanillaSelectedFiles.has(fileName)) {
+    vanillaSelectedFiles.delete(fileName);
+  } else {
+    vanillaSelectedFiles.add(fileName);
+  }
+  updateVanillaBatchBar();
+  renderFileList();
+}
+
+function toggleVanillaSelectAll() {
+  const searchVal = (document.getElementById('searchInput')?.value || '').trim().toLowerCase();
+  const categoryFilter = document.getElementById('typeFilter')?.value || 'all';
+
+  const visible = repositoryFiles.filter(item => {
+    const matchesSearch = item.name.toLowerCase().includes(searchVal) || 
+                          (item.category && item.category.toLowerCase().includes(searchVal)) ||
+                          (item.type && item.type.toLowerCase().includes(searchVal));
+    const matchesCategory = categoryFilter === 'all' || item.category === categoryFilter;
+    return matchesSearch && matchesCategory;
+  });
+
+  const allSelected = visible.length > 0 && visible.every(f => vanillaSelectedFiles.has(f.name));
+  if (allSelected) {
+    visible.forEach(f => vanillaSelectedFiles.delete(f.name));
+  } else {
+    visible.forEach(f => vanillaSelectedFiles.add(f.name));
+  }
+  updateVanillaBatchBar();
+  renderFileList();
+}
+
+function clearVanillaSelection() {
+  vanillaSelectedFiles.clear();
+  updateVanillaBatchBar();
+  renderFileList();
+}
+
+function updateVanillaBatchBar() {
+  const bar = document.getElementById('batchActionBar');
+  const summary = document.getElementById('selectionSummary');
+  const selectAllCb = document.getElementById('selectAllCheckbox');
+  const selectAllText = document.getElementById('selectAllText');
+  const selectedCountText = document.getElementById('selectedCountText');
+  const barTitle = document.getElementById('batchBarTitle');
+  const barSize = document.getElementById('batchBarSize');
+
+  const count = vanillaSelectedFiles.size;
+  const selectedList = repositoryFiles.filter(f => vanillaSelectedFiles.has(f.name));
+  const totalBytes = selectedList.reduce((acc, f) => acc + (f.size || 0), 0);
+
+  if (count > 0) {
+    if (bar) bar.style.display = 'flex';
+    if (summary) summary.style.display = 'flex';
+    if (barTitle) barTitle.textContent = `${count} file${count > 1 ? 's' : ''} selected`;
+    if (barSize) barSize.textContent = `Total: ${formatBytes(totalBytes)}`;
+    if (selectedCountText) selectedCountText.textContent = `${count} selected (${formatBytes(totalBytes)})`;
+  } else {
+    if (bar) bar.style.display = 'none';
+    if (summary) summary.style.display = 'none';
+  }
+
+  // Check if all visible are selected
+  const searchVal = (document.getElementById('searchInput')?.value || '').trim().toLowerCase();
+  const categoryFilter = document.getElementById('typeFilter')?.value || 'all';
+  const visible = repositoryFiles.filter(item => {
+    const matchesSearch = item.name.toLowerCase().includes(searchVal) || 
+                          (item.category && item.category.toLowerCase().includes(searchVal)) ||
+                          (item.type && item.type.toLowerCase().includes(searchVal));
+    const matchesCategory = categoryFilter === 'all' || item.category === categoryFilter;
+    return matchesSearch && matchesCategory;
+  });
+
+  const isAll = visible.length > 0 && visible.every(f => vanillaSelectedFiles.has(f.name));
+  if (selectAllCb) selectAllCb.checked = isAll;
+  if (selectAllText) selectAllText.textContent = isAll ? 'Deselect all visible' : `Select all (${visible.length})`;
+}
+
+async function downloadAllVanillaSelected() {
+  const selectedList = repositoryFiles.filter(f => vanillaSelectedFiles.has(f.name));
+  if (selectedList.length === 0) return;
+  showToast(`Starting browser download for ${selectedList.length} files...`);
+
+  for (let i = 0; i < selectedList.length; i++) {
+    const file = selectedList[i];
+    const link = document.createElement('a');
+    link.href = file.url || `/upload/${file.name}`;
+    link.download = file.name;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+
+    if (i < selectedList.length - 1) {
+      await new Promise(r => setTimeout(r, 400));
+    }
+  }
+}
+
+function exportVanillaAria2Batch() {
+  const selectedList = repositoryFiles.filter(f => vanillaSelectedFiles.has(f.name));
+  if (selectedList.length === 0) return;
+  const lines = [
+    '# FileShelf aria2 batch download list',
+    '# Run command: aria2c -j 4 -c -i aria2-batch.txt',
+    '',
+    ...selectedList.map(f => new URL(f.url || `/upload/${f.name}`, window.location.origin).href)
+  ];
+  const blob = new Blob([lines.join('\n')], { type: 'text/plain;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'aria2-batch.txt';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  showToast(`Exported aria2 batch file (${selectedList.length} files)`);
+}
+
+function exportVanillaBashBatch() {
+  const selectedList = repositoryFiles.filter(f => vanillaSelectedFiles.has(f.name));
+  if (selectedList.length === 0) return;
+  const commands = [
+    '#!/usr/bin/env bash',
+    '# FileShelf Batch Downloader & Checksum Verifier',
+    '# Generated on ' + new Date().toISOString(),
+    'set -e',
+    '',
+    'echo "==> Downloading ' + selectedList.length + ' package(s) from ' + window.location.origin + '..."',
+    ''
+  ];
+  selectedList.forEach(f => {
+    const fileUrl = new URL(f.url || `/upload/${f.name}`, window.location.origin).href;
+    commands.push(`echo "==> Fetching ${f.name}..."`);
+    commands.push(`curl -C - -LO "${fileUrl}" || wget -c "${fileUrl}"`);
+    if (f.sha256) {
+      commands.push(`echo "${f.sha256}  ${f.name}" | sha256sum --check || echo "Warning: Checksum verification failed for ${f.name}"`);
+    }
+    commands.push('');
+  });
+  commands.push('echo "==> All downloads completed successfully!"');
+  const blob = new Blob([commands.join('\n')], { type: 'text/x-shellscript;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'download-selected.sh';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  showToast(`Exported Bash script (${selectedList.length} files)`);
+}
+
+function exportVanillaPowerShellBatch() {
+  const selectedList = repositoryFiles.filter(f => vanillaSelectedFiles.has(f.name));
+  if (selectedList.length === 0) return;
+  const lines = [
+    '# FileShelf PowerShell Batch Downloader',
+    '# Run in PowerShell: .\\download-selected.ps1',
+    'Write-Host "==> Starting batch download of ' + selectedList.length + ' files..." -ForegroundColor Cyan',
+    ''
+  ];
+  selectedList.forEach(f => {
+    const fileUrl = new URL(f.url || `/upload/${f.name}`, window.location.origin).href;
+    lines.push(`Write-Host "Fetching ${f.name}..." -ForegroundColor Yellow`);
+    lines.push(`Invoke-WebRequest -Uri "${fileUrl}" -OutFile "${f.name}"`);
+    if (f.sha256) {
+      lines.push(`$localHash = (Get-FileHash .\\${f.name} -Algorithm SHA256).Hash.ToLower()`);
+      lines.push(`if ($localHash -eq "${f.sha256.toLowerCase()}") { Write-Host "Verified SHA256 for ${f.name}: MATCH" -ForegroundColor Green } else { Write-Warning "Checksum mismatch for ${f.name}!" }`);
+    }
+    lines.push('');
+  });
+  lines.push('Write-Host "==> All downloads completed!" -ForegroundColor Green');
+  const blob = new Blob([lines.join('\r\n')], { type: 'text/plain;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'download-selected.ps1';
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+  showToast(`Exported PowerShell script (${selectedList.length} files)`);
+}
+
+function copyVanillaSelectedUrls() {
+  const selectedList = repositoryFiles.filter(f => vanillaSelectedFiles.has(f.name));
+  if (selectedList.length === 0) return;
+  const urls = selectedList.map(f => new URL(f.url || `/upload/${f.name}`, window.location.origin).href).join('\n');
+  navigator.clipboard.writeText(urls);
+  showToast(`Copied ${selectedList.length} direct URLs to clipboard`);
+}
+
 // Render Public File List
 function renderFileList() {
   const fileListEl = document.getElementById('fileList');
@@ -146,10 +342,20 @@ function renderFileList() {
     const dateStr = item.modified ? item.modified.slice(0, 10) : '';
     const sizeStr = formatBytes(item.size || 0);
     const downloadUrl = item.url || `/upload/${item.name}`;
+    const isSelected = vanillaSelectedFiles.has(item.name);
 
     return `
-      <div class="file-row">
+      <div class="file-row ${isSelected ? 'file-row-selected' : ''}">
         <div class="file-info-group">
+          <div class="file-row-checkbox-wrap">
+            <input 
+              type="checkbox" 
+              class="file-checkbox" 
+              ${isSelected ? 'checked' : ''} 
+              onchange="toggleVanillaSelectFile('${item.name}')"
+              title="${isSelected ? 'Deselect' : 'Select'} ${item.name}"
+            >
+          </div>
           <div class="file-type-icon">${typeLabel}</div>
           <div class="file-text-meta">
             <div class="file-name" title="${item.name}">${item.name}</div>
@@ -185,9 +391,39 @@ function renderRecentUploads() {
         <div class="recent-name">${item.name}</div>
         <div class="recent-meta">${item.sizeFormatted} · ${item.timeAgo}</div>
       </div>
-      <span class="category-badge">${item.category}</span>
+      <div style="display: flex; align-items: center; gap: 8px;">
+        <span class="category-badge">${item.category}</span>
+        <button type="button" class="btn-delete-item" onclick="deleteVanillaFile('${item.name}')" title="Delete ${item.name} from repository">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="3 6 5 6 21 6"></polyline>
+            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+          </svg>
+        </button>
+      </div>
     </div>
   `).join('');
+}
+
+// Delete file from repository & update manifest
+function deleteVanillaFile(fileName) {
+  if (!confirm(`Are you sure you want to remove "${fileName}" from the repository?\nThis will remove the file from local state and trigger an update to index.json.`)) {
+    return;
+  }
+  repositoryFiles = repositoryFiles.filter(f => f.name !== fileName);
+  vanillaSelectedFiles.delete(fileName);
+  recentUploads = recentUploads.filter(r => r.name !== fileName);
+
+  try {
+    localStorage.setItem('fileshelf_manifest_files', JSON.stringify(repositoryFiles));
+  } catch {}
+
+  updateStats();
+  renderFileList();
+  renderRecentUploads();
+  updateVanillaBatchBar();
+
+  regenerateIndex();
+  showToast(`Deleted "${fileName}". index.json manifest updated.`);
 }
 
 // Copy URL to clipboard
@@ -211,17 +447,94 @@ function showToast(msg) {
   }, 2500);
 }
 
+// Pure JS SHA-256 Fallback (Ensures authentication works on insecure HTTP / IP address / LAN without HTTPS)
+function jsSha256(ascii) {
+  function rightRotate(value, amount) {
+    return (value >>> amount) | (value << (32 - amount));
+  }
+  var mathPow = Math.pow;
+  var maxWord = mathPow(2, 32);
+  var lengthProperty = 'length';
+  var i, j;
+  var result = '';
+  var words = [];
+  var asciiBitLength = ascii[lengthProperty] * 8;
+  var hash = [];
+  var k = [];
+  var primeCounter = 0;
+  var isComposite = {};
+  for (var candidate = 2; primeCounter < 64; candidate++) {
+    if (!isComposite[candidate]) {
+      for (i = 0; i < 313; i += candidate) {
+        isComposite[i] = candidate;
+      }
+      hash[primeCounter] = (mathPow(candidate, 0.5) * maxWord) | 0;
+      k[primeCounter++] = (mathPow(candidate, 1 / 3) * maxWord) | 0;
+    }
+  }
+  ascii += '\x80';
+  while (ascii[lengthProperty] % 64 - 56) ascii += '\x00';
+  for (i = 0; i < ascii[lengthProperty]; i++) {
+    j = ascii.charCodeAt(i);
+    if (j >> 8) return '';
+    words[i >> 2] |= j << ((3 - i) % 4) * 8;
+  }
+  words[words[lengthProperty]] = ((asciiBitLength / maxWord) | 0);
+  words[words[lengthProperty]] = (asciiBitLength);
+  for (j = 0; j < words[lengthProperty];) {
+    var w = words.slice(j, j += 16);
+    var oldHash = hash;
+    hash = hash.slice(0, 8);
+    for (i = 0; i < 64; i++) {
+      var w15 = w[i - 15], w2 = w[i - 2];
+      var a = hash[0], e = hash[4];
+      var temp1 = hash[7]
+        + (rightRotate(e, 6) ^ rightRotate(e, 11) ^ rightRotate(e, 25))
+        + ((e & hash[5]) ^ ((~e) & hash[6]))
+        + k[i]
+        + (w[i] = (i < 16) ? w[i] : (
+            w[i - 16]
+            + (rightRotate(w15, 7) ^ rightRotate(w15, 18) ^ (w15 >>> 3))
+            + w[i - 7]
+            + (rightRotate(w2, 17) ^ rightRotate(w2, 19) ^ (w2 >>> 10))
+          ) | 0
+        );
+      var temp2 = (rightRotate(a, 2) ^ rightRotate(a, 13) ^ rightRotate(a, 22))
+        + ((a & hash[1]) ^ (a & hash[2]) ^ (hash[1] & hash[2]));
+      hash = [(temp1 + temp2) | 0].concat(hash);
+      hash[4] = (hash[4] + temp1) | 0;
+    }
+    for (i = 0; i < 8; i++) {
+      hash[i] = (hash[i] + oldHash[i]) | 0;
+    }
+  }
+  for (i = 0; i < 8; i++) {
+    for (j = 3; j + 1; j--) {
+      var b = (hash[i] >> (j * 8)) & 255;
+      result += ((b < 16) ? '0' : '') + b.toString(16);
+    }
+  }
+  return result;
+}
+
 // Security Configuration (Salted SHA-256 hashes of credentials)
 const ADMIN_SALT = 'fileshelf_salt_2026';
 const EXPECTED_USER_HASH = 'ce9a65f46d77cb3f6062cf6e831bc63a5bd0c1f130fe49a9e9ce6a876de860af';
 const EXPECTED_PASS_HASH = '1ffd0f352a199436b81c1f1ef4dfd827e3c05228d7f12a3e634998ccd62ffab8';
 
 async function computeSha256(str) {
-  const encoder = new TextEncoder();
-  const data = encoder.encode(str);
-  const hashBuffer = await crypto.subtle.digest('SHA-256', data);
-  const hashArray = Array.from(new Uint8Array(hashBuffer));
-  return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+  try {
+    if (typeof window !== 'undefined' && window.crypto && window.crypto.subtle && window.crypto.subtle.digest) {
+      const encoder = new TextEncoder();
+      const data = encoder.encode(str);
+      const hashBuffer = await crypto.subtle.digest('SHA-256', data);
+      const hashArray = Array.from(new Uint8Array(hashBuffer));
+      return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+    }
+  } catch (err) {
+    console.warn('Web Crypto subtle digest failed, using JS SHA-256 fallback:', err);
+  }
+  return jsSha256(str);
 }
 
 let isAdminAuthenticated = sessionStorage.getItem('fileshelf_admin_auth') === '1';
@@ -261,14 +574,31 @@ function switchView(viewName) {
 
 // Handle Vanilla Login Form submission
 async function handleVanillaLogin(e) {
-  e.preventDefault();
-  const user = document.getElementById('loginUser').value.trim();
-  const pass = document.getElementById('loginPass').value;
+  if (e) {
+    if (e.preventDefault) e.preventDefault();
+    if (e.stopPropagation) e.stopPropagation();
+  }
+
+  const userInput = document.getElementById('loginUser');
+  const passInput = document.getElementById('loginPass');
   const alertEl = document.getElementById('loginAlert');
   const btn = document.getElementById('btnSubmitLogin');
 
-  btn.textContent = 'Verifying...';
-  btn.disabled = true;
+  const user = (userInput?.value || '').trim();
+  const pass = passInput?.value || '';
+
+  if (!user || !pass) {
+    if (alertEl) {
+      alertEl.textContent = 'Please enter both username and password.';
+      alertEl.style.display = 'block';
+    }
+    return false;
+  }
+
+  if (btn) {
+    btn.textContent = 'Verifying...';
+    btn.disabled = true;
+  }
 
   try {
     const userH = await computeSha256(user + ':' + ADMIN_SALT);
@@ -279,8 +609,8 @@ async function handleVanillaLogin(e) {
       sessionStorage.setItem('fileshelf_admin_auth', '1');
       showToast('Admin authenticated successfully');
       
-      document.getElementById('loginUser').value = '';
-      document.getElementById('loginPass').value = '';
+      if (userInput) userInput.value = '';
+      if (passInput) passInput.value = '';
       if (alertEl) alertEl.style.display = 'none';
 
       switchView('admin');
@@ -291,14 +621,18 @@ async function handleVanillaLogin(e) {
       }
     }
   } catch (err) {
+    console.error('Authentication error:', err);
     if (alertEl) {
       alertEl.textContent = 'Error processing authentication.';
       alertEl.style.display = 'block';
     }
   } finally {
-    btn.textContent = 'Sign In to Admin';
-    btn.disabled = false;
+    if (btn) {
+      btn.textContent = 'Sign In to Admin';
+      btn.disabled = false;
+    }
   }
+  return false;
 }
 
 // Toggle password mask

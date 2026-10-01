@@ -60,10 +60,55 @@
         </div>
       </div>
 
+      <!-- Batch Selection Toolbar -->
+      <div class="batch-select-bar">
+        <label class="select-all-label">
+          <input type="checkbox" id="selectAllCheckbox" onchange="toggleVanillaSelectAll()">
+          <span id="selectAllText">Select all</span>
+        </label>
+        <div id="selectionSummary" class="selection-summary" style="display: none;">
+          <span id="selectedCountText">0 files selected</span>
+          <button type="button" class="btn-clear-selection" onclick="clearVanillaSelection()">Clear</button>
+        </div>
+      </div>
+
       <!-- File List -->
       <div id="fileList" class="file-list">
         <!-- Rendered via app.js -->
         <div class="empty-state">Loading repository manifest...</div>
+      </div>
+
+      <!-- Floating Batch Action Bar -->
+      <div id="batchActionBar" class="floating-batch-bar" style="display: none;">
+        <div class="batch-bar-info">
+          <div class="batch-bar-title" id="batchBarTitle">0 files selected</div>
+          <div class="batch-bar-size" id="batchBarSize">Total: 0 B</div>
+        </div>
+        <div class="batch-bar-actions">
+          <button type="button" class="btn-batch-primary" onclick="downloadAllVanillaSelected()">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+              <polyline points="7 10 12 15 17 10"></polyline>
+              <line x1="12" y1="15" x2="12" y2="3"></line>
+            </svg>
+            Download All
+          </button>
+          <button type="button" class="btn-batch-secondary" onclick="exportVanillaAria2Batch()" title="Export aria2 batch list">
+            aria2 list
+          </button>
+          <button type="button" class="btn-batch-secondary" onclick="exportVanillaBashBatch()" title="Export Bash download script">
+            Bash (.sh)
+          </button>
+          <button type="button" class="btn-batch-secondary" onclick="exportVanillaPowerShellBatch()" title="Export PowerShell script">
+            PowerShell (.ps1)
+          </button>
+          <button type="button" class="btn-batch-secondary" onclick="copyVanillaSelectedUrls()" title="Copy direct links">
+            Copy URLs
+          </button>
+          <button type="button" class="btn-batch-close" onclick="clearVanillaSelection()" title="Deselect all">
+            &times;
+          </button>
+        </div>
       </div>
 
       <!-- Read-Only Notice Box -->
@@ -94,7 +139,7 @@
           <p class="login-subtitle">Authentication required to access installer staging and manifest generation.</p>
         </div>
 
-        <form id="adminLoginForm" onsubmit="handleVanillaLogin(event)">
+        <form id="adminLoginForm" onsubmit="handleVanillaLogin(event); return false;" action="javascript:void(0);">
           <div id="loginAlert" class="login-alert" style="display: none;"></div>
 
           <div class="form-group">
