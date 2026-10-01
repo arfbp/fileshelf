@@ -27,7 +27,10 @@ import {
   BarChart3,
   TrendingUp,
   HardDrive,
-  Activity
+  Activity,
+  Trash2,
+  Trash,
+  AlertTriangle
 } from 'lucide-react';
 import {
   BarChart,
@@ -369,9 +372,19 @@ function extractType(filename: string): string {
 
 export default function App() {
   const [view, setView] = useState<'public' | 'admin'>('public');
-  const [files, setFiles] = useState<FileItem[]>(INITIAL_FILES);
+  const [files, setFiles] = useState<FileItem[]>(() => {
+    try {
+      const stored = localStorage.getItem('fileshelf_manifest_files');
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+      }
+    } catch {}
+    return INITIAL_FILES;
+  });
   const [recentUploads, setRecentUploads] = useState<RecentUpload[]>(INITIAL_RECENT_UPLOADS);
   const [searchQuery, setSearchQuery] = useState('');
+  const [adminSearchQuery, setAdminSearchQuery] = useState('');
   const [typeFilter, setTypeFilter] = useState('all');
   const [sortOption, setSortOption] = useState<'name-asc' | 'name-desc' | 'newest' | 'oldest' | 'largest' | 'smallest' | 'type'>('name-asc');
   
@@ -380,6 +393,7 @@ export default function App() {
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const [activeModalFile, setActiveModalFile] = useState<FileItem | null>(null);
   const [verifyModalFile, setVerifyModalFile] = useState<FileItem | null>(null);
+  const [fileToDelete, setFileToDelete] = useState<FileItem | null>(null);
   const [userTestHash, setUserTestHash] = useState('');
   const [copiedHash, setCopiedHash] = useState(false);
 
@@ -741,7 +755,13 @@ export default function App() {
       setUploadProgress(100);
       setUploadStatusText(`Staged ${fileList.length} file(s) with SHA-256`);
 
-      setFiles(prev => [...stagedResults.map(r => r.item), ...prev]);
+      setFiles(prev => {
+        const updated = [...stagedResults.map(r => r.item), ...prev];
+        try {
+          localStorage.setItem('fileshelf_manifest_files', JSON.stringify(updated));
+        } catch {}
+        return updated;
+      });
       setRecentUploads(prev => [...stagedResults.map(r => r.recent), ...prev]);
       triggerToast(`Staged ${fileList.length} installer file(s) with SHA-256 checksum.`);
 
@@ -769,18 +789,44 @@ export default function App() {
     processFiles(e.dataTransfer.files);
   };
 
-  // Regenerate index.json
-  const handleRegenerate = () => {
-    triggerToast('Generated fresh index.json manifest.');
-    
-    // Provide export
-    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(files, null, 2));
+  // Trigger manifest file download / regeneration helper
+  const triggerManifestUpdate = (updatedFilesList: FileItem[], actionDesc: string) => {
+    try {
+      localStorage.setItem('fileshelf_manifest_files', JSON.stringify(updatedFilesList));
+    } catch {}
+
+    const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(updatedFilesList, null, 2));
     const downloadAnchor = document.createElement('a');
     downloadAnchor.setAttribute("href", dataStr);
     downloadAnchor.setAttribute("download", "index.json");
     document.body.appendChild(downloadAnchor);
     downloadAnchor.click();
     downloadAnchor.remove();
+
+    triggerToast(`${actionDesc}. index.json manifest updated (${updatedFilesList.length} files remaining).`);
+  };
+
+  // Delete file from local application state & trigger manifest update
+  const confirmDeleteFile = (file: FileItem) => {
+    const updated = files.filter(f => f.name !== file.name);
+    setFiles(updated);
+    
+    // Also remove from selectedFiles if selected
+    setSelectedFiles(prev => prev.filter(name => name !== file.name));
+    
+    // Also remove from recentUploads if present
+    setRecentUploads(prev => prev.filter(r => r.name !== file.name));
+
+    // Close modal
+    setFileToDelete(null);
+
+    // Trigger manifest update & download
+    triggerManifestUpdate(updated, `Deleted "${file.name}"`);
+  };
+
+  // Regenerate index.json
+  const handleRegenerate = () => {
+    triggerManifestUpdate(files, 'Regenerated fresh index.json');
   };
 
   // Filter & Sort computation
@@ -1568,10 +1614,32 @@ export default function App() {
                               </div>
                             </div>
 
-                            {/* Category Pill */}
-                            <span className="shrink-0 text-[11px] font-medium px-2.5 py-0.5 rounded-full bg-neutral-800/70 border border-neutral-700/60 text-neutral-300">
-                              {item.category}
-                            </span>
+                            <div className="flex items-center gap-2 shrink-0">
+                              {/* Category Pill */}
+                              <span className="text-[11px] font-medium px-2.5 py-0.5 rounded-full bg-neutral-800/70 border border-neutral-700/60 text-neutral-300">
+                                {item.category}
+                              </span>
+
+                              {/* Delete recent item */}
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  const target = files.find(f => f.name === item.name) || {
+                                    name: item.name,
+                                    type: 'bin',
+                                    category: item.category as any,
+                                    size: 0,
+                                    modified: new Date().toISOString(),
+                                    url: `/upload/${item.name}`
+                                  };
+                                  setFileToDelete(target);
+                                }}
+                                className="text-neutral-500 hover:text-rose-400 p-1.5 rounded-lg hover:bg-rose-500/10 transition-colors cursor-pointer"
+                                title={`Delete ${item.name} from repository`}
+                              >
+                                <Trash2 size={13} />
+                              </button>
+                            </div>
                           </div>
                         ))}
                       </div>
@@ -1583,8 +1651,109 @@ export default function App() {
                       className="w-full bg-[#202024] hover:bg-[#29292e] border border-neutral-700/80 text-white font-medium text-xs sm:text-sm py-2.5 px-4 rounded-lg transition-colors cursor-pointer flex items-center justify-center gap-2"
                     >
                       <RefreshCw size={14} />
-                      <span>Regenerate index.json</span>
+                      <span>Regenerate & Export index.json</span>
                     </button>
+                  </div>
+                </div>
+
+                {/* Repository File Inventory & Manifest Management Table */}
+                <div className="bg-[#1a1a1e] border border-neutral-800/80 rounded-xl p-5 mb-6">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <FileBox size={18} className="text-blue-400" />
+                        <h2 className="font-bold text-base text-white">
+                          Repository File Inventory
+                        </h2>
+                        <span className="bg-neutral-800 text-neutral-300 border border-neutral-700/60 text-xs px-2 py-0.5 rounded-full font-mono">
+                          {files.length}
+                        </span>
+                      </div>
+                      <p className="text-xs text-neutral-400 mt-1">
+                        Active packages in the local repository state. Click Delete to remove from state and auto-update index.json.
+                      </p>
+                    </div>
+
+                    <div className="flex items-center gap-2.5 w-full sm:w-auto">
+                      <div className="relative flex-1 sm:w-64">
+                        <input
+                          type="text"
+                          value={adminSearchQuery}
+                          onChange={(e) => setAdminSearchQuery(e.target.value)}
+                          placeholder="Filter repository files..."
+                          className="w-full bg-[#141418] border border-neutral-800 rounded-lg px-3 py-1.5 text-xs text-white placeholder-neutral-500 focus:outline-none focus:border-neutral-600 transition-colors"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Admin File List */}
+                  <div className="divide-y divide-neutral-800/80 max-h-[380px] overflow-y-auto pr-1">
+                    {files.filter(f => f.name.toLowerCase().includes(adminSearchQuery.toLowerCase()) || f.category.toLowerCase().includes(adminSearchQuery.toLowerCase())).length === 0 ? (
+                      <div className="py-8 text-center text-xs text-neutral-500 font-mono">
+                        No files matching "{adminSearchQuery}".
+                      </div>
+                    ) : (
+                      files
+                        .filter(f => f.name.toLowerCase().includes(adminSearchQuery.toLowerCase()) || f.category.toLowerCase().includes(adminSearchQuery.toLowerCase()))
+                        .map((file) => {
+                          const typeLabel = (file.type || extractType(file.name)).toUpperCase();
+                          const dateStr = file.modified ? file.modified.slice(0, 10) : '';
+                          const sizeStr = formatBytes(file.size);
+
+                          return (
+                            <div
+                              key={file.name}
+                              className="py-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3 hover:bg-[#16161b]/60 px-2 rounded-lg transition-colors"
+                            >
+                              <div className="flex items-center gap-3 min-w-0">
+                                <div className="w-9 h-9 rounded-lg bg-[#222227] border border-neutral-700/60 flex items-center justify-center font-mono font-bold text-[11px] text-neutral-300 shrink-0">
+                                  {typeLabel}
+                                </div>
+                                <div className="min-w-0">
+                                  <div className="font-semibold text-xs sm:text-sm text-white truncate" title={file.name}>
+                                    {file.name}
+                                  </div>
+                                  <div className="text-[11px] text-neutral-400 mt-0.5 font-mono">
+                                    {file.category} · {sizeStr} · {dateStr}
+                                  </div>
+                                </div>
+                              </div>
+
+                              <div className="flex items-center gap-2 self-end sm:self-center shrink-0">
+                                <button
+                                  type="button"
+                                  onClick={() => handleCopyUrl(file)}
+                                  className="bg-[#242429] hover:bg-[#2e2e35] border border-neutral-700/70 text-neutral-300 text-xs px-2.5 py-1.5 rounded-lg transition-colors cursor-pointer"
+                                  title="Copy URL"
+                                >
+                                  <Copy size={12} />
+                                </button>
+
+                                <a
+                                  href={file.url || `/upload/${file.name}`}
+                                  download={file.name}
+                                  className="bg-[#242429] hover:bg-[#2e2e35] border border-neutral-700/70 text-neutral-300 text-xs px-2.5 py-1.5 rounded-lg transition-colors cursor-pointer"
+                                  title="Download"
+                                >
+                                  <Download size={12} />
+                                </a>
+
+                                {/* Delete Button */}
+                                <button
+                                  type="button"
+                                  onClick={() => setFileToDelete(file)}
+                                  className="bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/30 text-rose-400 hover:text-rose-300 text-xs font-medium px-3 py-1.5 rounded-lg transition-colors flex items-center gap-1.5 cursor-pointer shadow-sm"
+                                  title={`Delete ${file.name} from repository`}
+                                >
+                                  <Trash2 size={13} />
+                                  <span>Delete</span>
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        })
+                    )}
                   </div>
                 </div>
 
@@ -1832,6 +2001,72 @@ start /wait ${activeModalFile.name}`}
               </div>
             </div>
 
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {fileToDelete && (
+        <div 
+          className="fixed inset-0 bg-black/80 flex items-center justify-center p-4 z-50 animate-in fade-in duration-150 backdrop-blur-sm"
+          onClick={() => setFileToDelete(null)}
+        >
+          <div 
+            className="bg-[#18181d] border border-neutral-700/90 rounded-2xl p-6 max-w-md w-full shadow-2xl relative"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start gap-3.5 mb-4">
+              <div className="w-10 h-10 rounded-xl bg-rose-500/10 border border-rose-500/30 flex items-center justify-center text-rose-400 shrink-0">
+                <AlertTriangle size={20} />
+              </div>
+              <div>
+                <h3 className="text-base font-bold text-white">
+                  Delete File from Repository?
+                </h3>
+                <p className="text-xs text-neutral-400 mt-1 leading-relaxed">
+                  Are you sure you want to remove <strong className="text-neutral-200 font-mono">{fileToDelete.name}</strong>?
+                </p>
+              </div>
+            </div>
+
+            <div className="bg-[#121215] border border-neutral-800 rounded-xl p-3.5 mb-5 text-xs font-mono space-y-1">
+              <div className="flex justify-between text-neutral-400">
+                <span>Category:</span>
+                <span className="text-neutral-200 font-sans">{fileToDelete.category}</span>
+              </div>
+              <div className="flex justify-between text-neutral-400">
+                <span>File Size:</span>
+                <span className="text-neutral-200">{formatBytes(fileToDelete.size)}</span>
+              </div>
+              {fileToDelete.sha256 && (
+                <div className="flex justify-between text-neutral-400 truncate gap-2">
+                  <span>SHA-256:</span>
+                  <span className="text-neutral-300 truncate max-w-[200px]">{fileToDelete.sha256.slice(0, 16)}...</span>
+                </div>
+              )}
+            </div>
+
+            <p className="text-[11px] text-neutral-400 mb-5 leading-normal">
+              This will immediately remove the file from the local application state and automatically trigger an update and download of the <strong className="text-neutral-200 font-mono">index.json</strong> manifest.
+            </p>
+
+            <div className="flex items-center justify-end gap-2.5">
+              <button
+                type="button"
+                onClick={() => setFileToDelete(null)}
+                className="bg-[#242429] hover:bg-[#2e2e35] border border-neutral-700 text-neutral-300 text-xs font-medium px-4 py-2 rounded-lg transition-colors cursor-pointer"
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={() => confirmDeleteFile(fileToDelete)}
+                className="bg-rose-600 hover:bg-rose-500 text-white text-xs font-semibold px-4 py-2 rounded-lg transition-colors flex items-center gap-1.5 shadow-sm cursor-pointer"
+              >
+                <Trash2 size={13} />
+                <span>Delete & Update Manifest</span>
+              </button>
+            </div>
           </div>
         </div>
       )}

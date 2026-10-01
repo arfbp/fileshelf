@@ -391,9 +391,39 @@ function renderRecentUploads() {
         <div class="recent-name">${item.name}</div>
         <div class="recent-meta">${item.sizeFormatted} · ${item.timeAgo}</div>
       </div>
-      <span class="category-badge">${item.category}</span>
+      <div style="display: flex; align-items: center; gap: 8px;">
+        <span class="category-badge">${item.category}</span>
+        <button type="button" class="btn-delete-item" onclick="deleteVanillaFile('${item.name}')" title="Delete ${item.name} from repository">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <polyline points="3 6 5 6 21 6"></polyline>
+            <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+          </svg>
+        </button>
+      </div>
     </div>
   `).join('');
+}
+
+// Delete file from repository & update manifest
+function deleteVanillaFile(fileName) {
+  if (!confirm(`Are you sure you want to remove "${fileName}" from the repository?\nThis will remove the file from local state and trigger an update to index.json.`)) {
+    return;
+  }
+  repositoryFiles = repositoryFiles.filter(f => f.name !== fileName);
+  vanillaSelectedFiles.delete(fileName);
+  recentUploads = recentUploads.filter(r => r.name !== fileName);
+
+  try {
+    localStorage.setItem('fileshelf_manifest_files', JSON.stringify(repositoryFiles));
+  } catch {}
+
+  updateStats();
+  renderFileList();
+  renderRecentUploads();
+  updateVanillaBatchBar();
+
+  regenerateIndex();
+  showToast(`Deleted "${fileName}". index.json manifest updated.`);
 }
 
 // Copy URL to clipboard
