@@ -3,26 +3,71 @@
     "name": "Application-2.4.1.dmg",
     "type": "dmg",
     "category": "macOS",
-    "size": 224395264,
-    "modified": "2026-09-28T14:20:00Z",
+    "size": 61,
+    "modified": "2026-10-02T07:16:42Z",
     "sha256": "fa050d6738b12cddca8e5f423dc200a9b7ca1c3d44bf004c7bedcca6bf908ad4",
     "url": "/upload/Application-2.4.1.dmg"
+  },
+  {
+    "name": "archlinux-2026.09.01-x86_64.iso",
+    "type": "iso",
+    "category": "ISO",
+    "size": 71,
+    "modified": "2026-10-02T07:16:42Z",
+    "sha256": "ba93c564aabef1db37062b4a2e231b891ec2aba53c9aaecdcae6b3354301e252",
+    "url": "/upload/archlinux-2026.09.01-x86_64.iso"
+  },
+  {
+    "name": "dev-essentials-bundle.zip",
+    "type": "zip",
+    "category": "Archive",
+    "size": 65,
+    "modified": "2026-10-02T07:16:42Z",
+    "sha256": "b1dcb62dbe2f7aba4a5ba69e357f43899a53bfaf02852345242cd415054d9fa7",
+    "url": "/upload/dev-essentials-bundle.zip"
+  },
+  {
+    "name": "docker-desktop.pkg",
+    "type": "pkg",
+    "category": "macOS",
+    "size": 58,
+    "modified": "2026-10-02T07:16:42Z",
+    "sha256": "e09cd9a5958911368ba66c9d372a74bd7506d1170083ae92683d97b121cedda8",
+    "url": "/upload/docker-desktop.pkg"
+  },
+  {
+    "name": "enterprise-installer.msi",
+    "type": "msi",
+    "category": "Windows",
+    "size": 64,
+    "modified": "2026-10-02T07:16:42Z",
+    "sha256": "1729f39ed5a413a65dde112b302995adb6fc78991578ff6a0dac264fcda33590",
+    "url": "/upload/enterprise-installer.msi"
   },
   {
     "name": "GoogleChromeSetup.exe",
     "type": "exe",
     "category": "Windows",
-    "size": 134217728,
-    "modified": "2026-09-30T10:30:00Z",
+    "size": 61,
+    "modified": "2026-10-02T07:16:42Z",
     "sha256": "3af5dde5b2413dbc8fc0327210cda65c538eeb0438b94a5be5d6c72319c8b32d",
     "url": "/upload/GoogleChromeSetup.exe"
+  },
+  {
+    "name": "nginx-enterprise.rpm",
+    "type": "rpm",
+    "category": "Linux",
+    "size": 60,
+    "modified": "2026-10-02T07:16:42Z",
+    "sha256": "6b9c06784dd09290bb797064181b1b84d84a165f013f5bf4ff2e7097ff84851a",
+    "url": "/upload/nginx-enterprise.rpm"
   },
   {
     "name": "server-tools.deb",
     "type": "deb",
     "category": "Linux",
-    "size": 49283072,
-    "modified": "2026-09-27T08:15:00Z",
+    "size": 56,
+    "modified": "2026-10-02T07:16:42Z",
     "sha256": "0571fb132a0870133431c5faa9f512149e692b1230acbb609cdeae1e410410cc",
     "url": "/upload/server-tools.deb"
   },
@@ -30,8 +75,8 @@
     "name": "toolkit-linux.tar.gz",
     "type": "gz",
     "category": "Archive",
-    "size": 32505856,
-    "modified": "2026-09-26T19:40:00Z",
+    "size": 60,
+    "modified": "2026-10-02T07:16:42Z",
     "sha256": "af248f6896a054d1af94aaa38d4c3fc402f388ae93f1e00d76bd21e902d2f303",
     "url": "/upload/toolkit-linux.tar.gz"
   },
@@ -39,54 +84,9 @@
     "name": "VSCodeUserSetup-x64.exe",
     "type": "exe",
     "category": "Windows",
-    "size": 96468992,
-    "modified": "2026-09-29T11:05:00Z",
+    "size": 63,
+    "modified": "2026-10-02T07:16:42Z",
     "sha256": "b5bf84f354564dcd07678aabd04ee1684f45c6bb4ac4dbd6dbc03121096846bd",
     "url": "/upload/VSCodeUserSetup-x64.exe"
-  },
-  {
-    "name": "archlinux-2026.09.01-x86_64.iso",
-    "type": "iso",
-    "category": "ISO",
-    "size": 1181116006,
-    "modified": "2026-09-25T16:00:00Z",
-    "sha256": "ba93c564aabef1db37062b4a2e231b891ec2aba53c9aaecdcae6b3354301e252",
-    "url": "/upload/archlinux-2026.09.01-x86_64.iso"
-  },
-  {
-    "name": "enterprise-installer.msi",
-    "type": "msi",
-    "category": "Windows",
-    "size": 159383552,
-    "modified": "2026-09-24T09:12:00Z",
-    "sha256": "1729f39ed5a413a65dde112b302995adb6fc78991578ff6a0dac264fcda33590",
-    "url": "/upload/enterprise-installer.msi"
-  },
-  {
-    "name": "docker-desktop.pkg",
-    "type": "pkg",
-    "category": "macOS",
-    "size": 612368384,
-    "modified": "2026-09-23T15:30:00Z",
-    "sha256": "e09cd9a5958911368ba66c9d372a74bd7506d1170083ae92683d97b121cedda8",
-    "url": "/upload/docker-desktop.pkg"
-  },
-  {
-    "name": "nginx-enterprise.rpm",
-    "type": "rpm",
-    "category": "Linux",
-    "size": 29360128,
-    "modified": "2026-09-22T13:45:00Z",
-    "sha256": "6b9c06784dd09290bb797064181b1b84d84a165f013f5bf4ff2e7097ff84851a",
-    "url": "/upload/nginx-enterprise.rpm"
-  },
-  {
-    "name": "dev-essentials-bundle.zip",
-    "type": "zip",
-    "category": "Archive",
-    "size": 471859200,
-    "modified": "2026-09-20T08:00:00Z",
-    "sha256": "b1dcb62dbe2f7aba4a5ba69e357f43899a53bfaf02852345242cd415054d9fa7",
-    "url": "/upload/dev-essentials-bundle.zip"
   }
 ]
